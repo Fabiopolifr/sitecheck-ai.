@@ -1,9 +1,12 @@
 export type TrackerId =
   | "google_tag_manager"
   | "google_analytics"
+  | "google_ads"
   | "meta_pixel"
   | "tiktok_pixel"
   | "linkedin_insight"
+  | "pinterest_tag"
+  | "twitter_pixel"
   | "hotjar"
   | "microsoft_clarity";
 
@@ -12,8 +15,13 @@ const TRACKER_PATTERNS: Record<TrackerId, RegExp[]> = {
   google_analytics: [
     /googletagmanager\.com\/gtag\/js/i,
     /google-analytics\.com\/analytics\.js/i,
-    /gtag\(\s*['"]config['"]/i,
+    /gtag\(\s*['"]config['"]\s*,\s*['"]G-/i,
     /\bUA-\d{4,}-\d+\b/,
+  ],
+  google_ads: [
+    /gtag\(\s*['"]config['"]\s*,\s*['"]AW-/i,
+    /googleadservices\.com\/pagead/i,
+    /\bAW-\d{6,}\b/,
   ],
   meta_pixel: [
     /connect\.facebook\.net\/.*\/fbevents\.js/i,
@@ -24,6 +32,8 @@ const TRACKER_PATTERNS: Record<TrackerId, RegExp[]> = {
     /snap\.licdn\.com\/li\.lms-analytics/i,
     /_linkedin_partner_id/i,
   ],
+  pinterest_tag: [/s\.pinimg\.com\/ct\/core\.js/i, /pintrk\(\s*['"]load['"]/i],
+  twitter_pixel: [/static\.ads-twitter\.com\/uwt\.js/i, /twq\(\s*['"]config['"]/i],
   hotjar: [/static\.hotjar\.com/i, /\bhjid\s*[:=]/i],
   microsoft_clarity: [/clarity\.ms\/tag/i, /clarity\(\s*['"]set['"]/i],
 };
@@ -37,6 +47,14 @@ export function detectTrackers(html: string): TrackerDetection[] {
   }));
 }
 
+/**
+ * Consent Management Platform vendor signatures. Prioritizes CMPs common
+ * on Italian/EU small-business sites (WordPress plugins, legal-compliance
+ * SaaS) plus Google's own consent tooling, since a real estate agency
+ * site running only Google Ads/Analytics with "Consent Mode" but no
+ * third-party CMP is a common real-world case that must not read as "no
+ * consent management at all".
+ */
 const CMP_PATTERNS: Record<string, RegExp[]> = {
   cookieyes: [/cdn-cookieyes\.com/i, /cookieyes/i],
   iubenda: [/cdn\.iubenda\.com/i, /iubenda_cs/i],
@@ -44,6 +62,19 @@ const CMP_PATTERNS: Record<string, RegExp[]> = {
   cookiebot: [/consent\.cookiebot\.com/i],
   complianz: [/cmplz-/i, /complianz/i],
   quantcast: [/quantcast\.mgr\.consensu\.org/i, /__cmp\(/i],
+  google_funding_choices: [
+    /fundingchoicesmessages\.google\.com/i,
+    /googlefc\.(ccpa|controlledMessagingFunction)/i,
+  ],
+  didomi: [/sdk\.privacy-center\.org/i, /didomi/i],
+  usercentrics: [/app\.usercentrics\.eu/i, /usercentrics/i],
+  osano: [/cmp\.osano\.com/i],
+  termly: [/app\.termly\.io/i],
+  axeptio: [/static\.axept\.io/i],
+  cookiescript: [/cdn\.cookie-script\.com/i],
+  borlabs_cookie: [/borlabs-cookie/i],
+  real_cookie_banner: [/real-cookie-banner/i, /consent_api\.php/i],
+  webtoffee: [/gdpr-cookie-compliance/i],
 };
 
 const GENERIC_BANNER_KEYWORDS = [

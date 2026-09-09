@@ -58,10 +58,14 @@ export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 px-6 py-6">
+    <div className="rounded-2xl border border-accent/20 bg-accent-soft px-6 py-6">
       <h3 className="text-base font-semibold text-zinc-900">
-        Ricevi il report completo via email
+        Salva questo report
       </h3>
+      <p className="mt-1 text-sm text-zinc-600">
+        Ti mandiamo il link ai risultati via email, così puoi ritrovarli
+        quando vuoi o condividerli con il tuo team.
+      </p>
       <form
         onSubmit={handleSubmit}
         className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start"

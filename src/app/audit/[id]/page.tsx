@@ -142,22 +142,27 @@ export default async function AuditResultsPage({
           </div>
         )}
 
-        <div className="mt-10 flex flex-col gap-4">
-          {audit.categories
-            .filter((c) => c.category !== "forms")
-            .map((category) => (
-              <CategoryDetails key={category.category} category={category} />
-            ))}
+        <div className="mt-10">
+          <EmailCaptureForm auditId={audit.id} />
         </div>
 
         {cookieConsentNeedsAttention(audit) && (
-          <div className="mt-10">
+          <div className="mt-6">
             <AffiliateCta auditId={audit.id} partner="cookieyes" />
           </div>
         )}
 
         <div className="mt-10">
-          <EmailCaptureForm auditId={audit.id} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Dettaglio per categoria
+          </h2>
+          <div className="mt-4 flex flex-col gap-4">
+            {audit.categories
+              .filter((c) => c.category !== "forms")
+              .map((category) => (
+                <CategoryDetails key={category.category} category={category} />
+              ))}
+          </div>
         </div>
 
         <p className="mt-10 text-xs leading-5 text-zinc-400">
