@@ -7,63 +7,57 @@ deve lavorare. Viene aggiornato ad ogni nuovo ciclo di sviluppo.
 
 ## Stato
 
-Phase 2 — Persistence + Leads + Affiliate: **completata**, in attesa di
-feedback prima di Phase 3 (AI Summaries).
+Phase 3 — AI Summaries: **completata**, in attesa di feedback prima di
+Phase 4 (Launch Analytics).
 
 ## Task completato
 
-Phase 2 (`AI/MASTER_SPEC.md` §32):
+Phase 3 (`AI/MASTER_SPEC.md` §32, §9):
 
-- [x] integrazione Supabase (`@supabase/supabase-js`, client service-role
-      server-only) con fallback automatico su store in-memory quando non
-      configurata
-- [x] schema SQL (`supabase/migrations/0001_init.sql`): `audits`,
-      `audit_checks`, `leads`, `affiliate_clicks`, RLS abilitata senza
-      policy pubbliche
-- [x] persistenza reale degli audit (`src/lib/db/auditsRepository.ts`)
-- [x] cattura lead con consenso marketing separato dal servizio
-      (`POST /api/leads`, `src/components/EmailCaptureForm.tsx`)
-- [x] adapter email provider-agnostico (`src/lib/email/`): Resend +
-      mock/dev di default
-- [x] redirect affiliato generico e tracciato (`GET /go/[partner]`,
-      partner `cookieyes` configurato via `COOKIEYES_AFFILIATE_URL`)
-- [x] CTA affiliato sui risultati quando Cookie & Consent ha criticità
-- [x] dashboard admin (`/admin`) con metriche aggregate: audit totali/
-      oggi/7gg, score medio, lead, tasso cattura email, click affiliati,
-      CTR, problemi e tecnologie più rilevate, audit recenti
-- [x] autenticazione admin: password singola + cookie firmato HMAC,
-      gate applicato da `src/proxy.ts` (convenzione Next.js 16, sostituisce
-      `middleware.ts` deprecato)
-- [x] `npm run lint`, `npm run format:check`, `npm run test` (37/37),
+- [x] interfaccia `AIProvider` provider-agnostica (`src/lib/ai/types.ts`)
+- [x] implementazione Anthropic (`@anthropic-ai/sdk`, modello di default
+      `claude-haiku-4-5`, configurabile via `AI_PROVIDER`/`AI_API_KEY`/`AI_MODEL`)
+- [x] prompt strutturato: input JSON minimale (site_score, industry,
+      checks[{id, category, status}]), output JSON validato
+- [x] validazione Zod dell'output AI, sia nel provider sia — di nuovo,
+      centralmente — nell'orchestratore (bug trovato e corretto, vedi
+      `AI/DECISIONS.md` D19)
+- [x] fallback deterministico basato su template, sempre disponibile;
+      l'audit non dipende mai dalla disponibilità AI
+- [x] persistenza `audit_summaries` (Supabase + fallback in-memory)
+- [x] UI risultati aggiornata: mostra il summary AI/deterministico e le
+      priorità con titolo + motivazione
+- [x] `npm run lint`, `npm run format:check`, `npm run test` (44/44),
       `npm run build` verdi
-- [x] verifica end-to-end reale (store in-memory, senza Supabase):
-      audit → lead capture → email mock → redirect affiliato con UTM →
-      dashboard admin con numeri corretti
-- [x] bug di sicurezza trovato e corretto durante il testing: il matcher
-      del proxy non proteggeva `/admin` nudo (solo `/admin/*`) — vedi
-      `AI/DECISIONS.md` D17
+- [x] verifica end-to-end reale (senza AI configurata, percorso
+      deterministico): audit contro `pypi.org` → summary e priorità
+      corrette e visibili in UI
 - [x] `AI/ARCHITECTURE.md` e `AI/DECISIONS.md` aggiornati
 
 ## Nota
 
-Non essendo disponibile un progetto Supabase live in questa sessione di
-sviluppo, l'integrazione Supabase non è stata verificata contro un
-database reale — solo tramite lettura del codice e coerenza dello schema
-SQL con le query. Prima del primo deploy con Supabase attivo, eseguire la
-migration (`supabase/migrations/0001_init.sql`) sul progetto reale e
-verificare un ciclo audit→lead→affiliato→dashboard end-to-end.
+Il percorso con provider Anthropic reale non è stato verificato con una
+chiamata effettiva all'API (nessuna `ANTHROPIC_API_KEY` di prodotto
+disponibile in questa sessione di sviluppo) — solo per lettura del codice
+e test unitari con provider mockato. Prima del primo deploy con
+`AI_PROVIDER=anthropic` attivo, eseguire almeno un audit reale con la
+chiave impostata e verificare che `audit_summaries.provider` /
+`audit_summaries.model` riportino `"anthropic"` / il modello configurato,
+e che il testo generato sia sensato.
 
 ## Prossimo task consigliato
 
-Phase 3 — AI Summaries (`AI/MASTER_SPEC.md` §32, §9):
+Phase 4 — Launch Analytics (`AI/MASTER_SPEC.md` §32, §14):
 
-- interfaccia `AIProvider` provider-agnostica
-- configurazione modello economico via env (`AI_PROVIDER`, `AI_API_KEY`,
-  `AI_MODEL`)
-- prompt strutturato: input JSON (site_score, industry, checks), output
-  JSON validato (summary + top_priorities)
-- fallback deterministico a template se la chiamata AI fallisce o non è
-  configurata (l'audit non deve mai dipendere dalla disponibilità AI)
-- persistenza in `audit_summaries`
+- tracking eventi interni: `landing_view`, `audit_started`,
+  `audit_completed`, `audit_failed`, `results_viewed`, `email_submitted`,
+  `affiliate_clicked`
+- tabella `analytics_events` (Supabase + fallback in-memory, stesso
+  pattern delle altre repository)
+- cattura UTM (`utm_source`, `utm_medium`, `utm_campaign`) — i campi
+  esistono già su `audits` ma non sono ancora popolati
+- metriche di conversione in admin dashboard: landing→audit start,
+  audit start→completion, results→email capture, results→affiliate click
+- documentazione di deployment in produzione
 
-In attesa di feedback esplicito prima di iniziare Phase 3.
+In attesa di feedback esplicito prima di iniziare Phase 4.

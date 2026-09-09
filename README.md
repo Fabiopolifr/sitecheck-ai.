@@ -15,6 +15,8 @@ Vedi `AI/MASTER_SPEC.md` per la specifica completa di prodotto e
 - Zod (validazione env/schema)
 - Supabase (`@supabase/supabase-js`) — opzionale in sviluppo, fallback
   automatico su store in-memory se non configurato
+- `@anthropic-ai/sdk` — opzionale, fallback deterministico se non
+  configurato
 - Vitest (test)
 - ESLint + Prettier
 
@@ -64,6 +66,23 @@ Per attivare il redirect `/go/cookieyes`, imposta
 `COOKIEYES_AFFILIATE_URL` in `.env.local` con il link di affiliazione
 reale. Senza questa variabile la rotta risponde 404 invece di reindirizzare
 verso un URL non configurato.
+
+## Configurazione AI (riassunto audit)
+
+Senza configurazione, ogni audit riceve comunque un riassunto e delle
+priorità, generati da un template deterministico (nessuna chiamata
+esterna). Per usare Claude al posto del template:
+
+```env
+AI_PROVIDER=anthropic
+AI_API_KEY=<chiave API Anthropic>
+AI_MODEL=claude-haiku-4-5
+```
+
+`AI_MODEL` è opzionale (default `claude-haiku-4-5`, il modello Claude più
+economico disponibile). Se la chiamata AI fallisce per qualunque motivo
+(rete, output non valido), l'app ricade automaticamente sul template
+deterministico — non è mai un punto di rottura.
 
 ## Comandi
 

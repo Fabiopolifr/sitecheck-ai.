@@ -7,7 +7,7 @@ progetto da Claude Code, task dopo task.
 
 ## Stato
 
-Phase 2 — Persistence + Leads + Affiliate completata.
+Phase 3 — AI Summaries completata.
 
 ## Log
 
@@ -95,3 +95,32 @@ Phase 2 — Persistence + Leads + Affiliate completata.
     email mock loggata correttamente → redirect affiliato con UTM
     corretti → dashboard admin con numeri esatti (1 audit, 100% cattura
     email, 100% CTR affiliati, problemi rilevati elencati)
+
+- 2026-09-09 — Phase 3 — AI Summaries:
+  - interfaccia `AIProvider` provider-agnostica (`src/lib/ai/`)
+  - provider Anthropic (`@anthropic-ai/sdk`, modello di default
+    `claude-haiku-4-5`), prompt strutturato con input/output JSON
+  - validazione Zod dell'output AI (`auditSummarySchema`)
+  - fallback deterministico basato su template (`buildDeterministicSummary`
+    in `src/features/audit/aiSummary.ts`), sempre disponibile
+  - persistenza `audit_summaries`
+    (`supabase/migrations/0002_audit_summaries.sql` + fallback in-memory)
+  - UI risultati aggiornata con summary e priorità arricchite (titolo +
+    motivazione)
+  - bug trovato e corretto durante il testing: la validazione dell'output
+    AI avveniva solo dentro il provider Anthropic, non nell'orchestratore
+    — un provider futuro che dimenticasse di validare avrebbe potuto
+    mostrare dati non validati all'utente; ora `generateAuditSummary`
+    rivalida sempre centralmente (vedi `AI/DECISIONS.md` D19)
+  - 44 test unitari totali (7 nuovi per schema + fallback deterministico
+    + gestione errori provider)
+  - aggiornati `AI/ARCHITECTURE.md`, `AI/DECISIONS.md`, `AI/CURRENT_TASK.md`
+  - verificati: `npm run lint`, `npm run format:check`, `npm run test`
+    (44/44), `npm run build` (tutti verdi)
+  - verifica end-to-end reale (percorso deterministico, nessuna
+    `ANTHROPIC_API_KEY` disponibile in questa sessione): audit contro
+    `pypi.org` → summary "Il Site Score rilevato è 72/100. Elementi da
+    verificare individuati in: Cookie & Consent, Privacy, SEO." e
+    priorità mostrate correttamente in UI; percorso con provider
+    Anthropic reale verificato solo per lettura del codice e test con
+    mock (vedi `AI/DECISIONS.md` D21)

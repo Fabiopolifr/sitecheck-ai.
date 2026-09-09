@@ -8,7 +8,7 @@ esterne. Va aggiornato ogni volta che l'architettura cambia.
 
 ## Stato
 
-Phase 2 — Persistence + Leads + Affiliate completata.
+Phase 3 — AI Summaries completata.
 
 ## Stack tecnologico
 
@@ -23,6 +23,8 @@ Phase 2 — Persistence + Leads + Affiliate completata.
 - **Database:** PostgreSQL via Supabase (`@supabase/supabase-js`, client
   service-role server-only). Fallback automatico a persistenza in-memory
   quando Supabase non è configurato (vedi `AI/DECISIONS.md`)
+- **AI:** `@anthropic-ai/sdk`, provider Anthropic dietro un'interfaccia
+  provider-agnostica; fallback deterministico sempre disponibile
 - **Lint:** ESLint 9 (flat config, `eslint-config-next`)
 - **Formattazione:** Prettier 3
 - **Test:** Vitest 4 (runner `node`, alias `@/*` → `src/*`)
@@ -53,13 +55,13 @@ Phase 2 — Persistence + Leads + Affiliate completata.
 │   │   └── content/        # Motore contenuti automatico (Phase 5)
 │   ├── lib/
 │   │   ├── config/         # Configurazione centralizzata (env.ts)
-│   │   ├── db/             # Repository Supabase + fallback in-memory (Phase 2)
+│   │   ├── db/             # Repository Supabase + fallback in-memory
 │   │   ├── email/          # Adapter email provider-agnostico (Phase 2)
 │   │   ├── ai/             # Layer AI provider-agnostico (Phase 3)
 │   │   └── security/       # SSRF guard, rate limiting, admin auth
 │   └── proxy.ts            # Guard di autenticazione per /admin (Phase 2)
 ├── supabase/
-│   └── migrations/         # Schema SQL (Phase 2)
+│   └── migrations/         # Schema SQL (Phase 2, Phase 3)
 ├── scripts/                # Script operativi futuri
 ├── tests/                  # Test Vitest
 ├── public/                 # Asset statici
@@ -209,6 +211,51 @@ Node.js). Il matcher copre sia `/admin` (percorso nudo) sia ogni
 secondo caso lasciava `/admin` accessibile senza autenticazione — trovato
 e corretto durante il testing end-to-end di questa fase (vedi
 `AI/DECISIONS.md`).
+
+## AI Summaries (Phase 3)
+
+`src/lib/ai/` è il layer provider-agnostico richiesto da
+`AI/MASTER_SPEC.md` §9:
+
+- `types.ts` — interfaccia `AIProvider` (`generateAuditSummary(input)`) e
+  i tipi `AuditSummaryInput`/`AuditSummary`.
+- `schema.ts` — schema Zod (`auditSummarySchema`) che valida l'output,
+  usato sia dentro il provider Anthropic sia — di nuovo, centralmente —
+  nell'orchestratore (vedi sotto): un provider che dimenticasse di
+  validare non deve poter mettere dati non validati davanti all'utente.
+- `providers/anthropicProvider.ts` — implementazione con
+  `@anthropic-ai/sdk`, modello di default `claude-haiku-4-5` (economico,
+  configurabile via `AI_MODEL`), system prompt che richiede JSON puro e
+  wording italiano non-legale coerente con `AI/MASTER_SPEC.md` §5.
+- `index.ts` — `getAIProvider()` ritorna il provider Anthropic solo se
+  `AI_PROVIDER=anthropic` e `AI_API_KEY` sono configurate, altrimenti
+  `null`.
+
+Orchestrazione (`src/features/audit/aiSummary.ts`,
+`generateAuditSummary(audit)`):
+
+1. Se nessun provider è configurato → template deterministico
+   (`buildDeterministicSummary`, usa i `Check[]` completi dell'audit per
+   un riassunto e fino a 3 priorità con severity `high`/`medium`).
+2. Se un provider è configurato, lo chiama con l'input minimale
+   `{site_score, industry, checks: [{id, category, status}]}` (§9), poi
+   **rivalida** l'output con `auditSummarySchema` a livello di
+   orchestratore.
+3. Qualsiasi errore (rete, JSON non valido, schema non conforme) →
+   ricade sullo stesso template deterministico. La funzione non lancia
+   mai eccezioni: l'audit non dipende mai dalla disponibilità dell'AI.
+
+Persistenza: `audit_summaries` (`supabase/migrations/0002_audit_summaries.sql`),
+con fallback in-memory (`src/lib/db/summariesRepository.ts`, stesso
+pattern `globalThis` delle altre repository). Generata una volta per
+audit completato, subito dopo `saveAudit` in `POST /api/audit` — una
+sola chiamata AI per audit, non per detector (`AI/MASTER_SPEC.md` §40).
+
+UI: la pagina risultati mostra il testo di `summary.summary` sopra le
+priorità; le priorità usano `summary.top_priorities` (title + reason)
+quando disponibili, altrimenti ricadono sulla lista calcolata
+localmente dai check `fail`/`warning` (compatibilità con eventuali audit
+salvati prima di questa fase).
 
 ## Deployment
 

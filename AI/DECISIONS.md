@@ -7,7 +7,7 @@ prese durante lo sviluppo di SiteCheck AI, con relative motivazioni.
 
 ## Stato
 
-Phase 2 — Persistence + Leads + Affiliate completata.
+Phase 3 — AI Summaries completata.
 
 ## Decisioni
 
@@ -247,3 +247,78 @@ sicurezza completa.
 di nuovo end-to-end: richiesta non autenticata → redirect 307 a
 `/admin/login`; richiesta con cookie di sessione valido → 200 con i dati
 della dashboard.
+
+### D18 — Provider AI di riferimento: Anthropic (Claude), non generico
+
+**Decisione:** l'unica implementazione concreta di `AIProvider` in Phase 3
+è `src/lib/ai/providers/anthropicProvider.ts`, che usa
+`@anthropic-ai/sdk` e, di default, il modello `claude-haiku-4-5`.
+
+**Motivazione:** `AI/MASTER_SPEC.md` §9 richiede un layer
+provider-agnostico ma non impone un vendor specifico ("use environment
+variables for provider, model, API key..."). Anthropic è una scelta
+naturale (SiteCheck AI è sviluppato con Claude Code) ed è esplicitamente
+economica per il compito: Haiku 4.5 è il modello Claude più economico
+attualmente disponibile, coerente con "use a low-cost model for routine
+tasks" (§9) e col budget ridotto del progetto. L'interfaccia `AIProvider`
+resta comunque generica: aggiungere un secondo provider (es. OpenAI)
+significa implementare l'interfaccia e aggiornare `getAIProvider()`,
+senza toccare l'orchestratore, i detector o la UI.
+
+### D19 — Validazione centralizzata nell'orchestratore, non solo nel provider
+
+**Cosa è successo:** la prima versione validava l'output AI solo dentro
+`anthropicProvider.ts` (che chiama `auditSummarySchema.parse(...)` prima
+di ritornare). Scrivendo il test per il percorso "provider configurato ma
+fallisce", un caso — un provider che ritorna dati malformati senza averli
+validati esso stesso — non veniva intercettato: l'orchestratore si
+fidava ciecamente del tipo `AuditSummary` restituito, che TypeScript non
+verifica a runtime.
+
+**Fix:** `generateAuditSummary` (`src/features/audit/aiSummary.ts`)
+rivalida l'output di *qualunque* provider con `auditSummarySchema` prima
+di usarlo, e ricade sul fallback deterministico se la validazione fallisce.
+Questo garantisce `AI/MASTER_SPEC.md` §9 ("Validate model output before
+storing/displaying it") anche per provider futuri che dimenticassero di
+validare autonomamente — difesa in profondità, non uno strato singolo di
+cui fidarsi.
+
+**Come è stato trovato:** scrivendo un test che simulava un provider con
+output malformato, non dalla sola lettura del codice — stesso pattern di
+D17 in Phase 2: il test end-to-end/unitario ha trovato un gap che la
+revisione del codice da sola non aveva notato.
+
+### D20 — Una chiamata AI per audit, sincrona, non in background
+
+**Decisione:** `generateAuditSummary` viene chiamata e attesa (`await`)
+dentro `POST /api/audit`, subito dopo aver salvato l'audit, prima di
+rispondere al client.
+
+**Motivazione:** `AI/MASTER_SPEC.md` §40 ("Cost Control") chiede
+esplicitamente "one AI summary call per completed audit" e mette in
+guardia contro "expensive background jobs" prematuri. Non esiste ancora
+un'infrastruttura di code/job in background nel progetto (e introdurla
+solo per questo sarebbe overbuilding in Phase 3); con un modello Haiku la
+latenza aggiuntiva è contenuta. Se in futuro la latenza percepita
+diventasse un problema, la generazione potrà essere spostata
+asincronamente senza cambiare l'interfaccia `AIProvider`.
+
+### D21 — Verifica limitata al percorso deterministico; nessuna chiamata reale al provider Anthropic
+
+**Decisione:** il percorso "nessun provider configurato → fallback
+deterministico" è stato verificato end-to-end contro `pypi.org` (Site
+Score 72/100, summary e priorità generate correttamente e mostrate in
+UI). Il percorso "provider Anthropic reale" è stato verificato solo per
+lettura del codice e con test unitari che mockano `AIProvider`, non con
+una chiamata reale all'API Anthropic.
+
+**Motivazione:** questa sessione di sviluppo non dispone di una
+`ANTHROPIC_API_KEY` di prodotto da usare per SiteCheck AI — solo delle
+credenziali interne della sessione Claude Code stessa, che non è
+appropriato riutilizzare per il traffico applicativo dell'owner. Stesso
+principio di trasparenza di D12 (Phase 1) e D13 (Phase 2): il gap è
+dichiarato qui invece di essere presentato come verificato. Prima del
+primo deploy con `AI_PROVIDER=anthropic` attivo, va eseguito almeno un
+audit reale con la chiave impostata e verificato che il summary generato
+sia sensato e che `provider`/`model` in `audit_summaries` riportino
+`"anthropic"` / `"claude-haiku-4-5"` (o il modello configurato).

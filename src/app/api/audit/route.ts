@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runAudit } from "@/features/audit/runAudit";
+import { generateAuditSummary } from "@/features/audit/aiSummary";
 import { saveAudit } from "@/lib/db/auditsRepository";
+import { saveSummary } from "@/lib/db/summariesRepository";
 import { isRateLimited } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
@@ -45,6 +47,11 @@ export async function POST(request: Request) {
   }
 
   await saveAudit(result.audit);
+
+  if (result.audit.status === "completed") {
+    const summary = await generateAuditSummary(result.audit);
+    await saveSummary(result.audit.id, summary);
+  }
 
   return NextResponse.json({ id: result.audit.id }, { status: 201 });
 }

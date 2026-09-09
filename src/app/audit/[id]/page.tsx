@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAudit } from "@/lib/db/auditsRepository";
+import { getSummary } from "@/lib/db/summariesRepository";
 import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 import { AffiliateCta } from "@/components/AffiliateCta";
@@ -62,8 +63,15 @@ export default async function AuditResultsPage({
     );
   }
 
+  const summary = await getSummary(audit.id);
   const allChecks = audit.categories.flatMap((c) => c.checks);
-  const priorities = topPriorities(allChecks, 3);
+  const fallbackPriorities = topPriorities(allChecks, 3).map((check) => ({
+    title: check.id,
+    reason: check.evidence ?? "elemento da verificare",
+  }));
+  const priorities = summary?.top_priorities.length
+    ? summary.top_priorities
+    : fallbackPriorities;
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
@@ -85,18 +93,25 @@ export default async function AuditResultsPage({
           )}
         </div>
 
+        {summary && (
+          <p className="mt-6 max-w-2xl text-base leading-7 text-zinc-700">
+            {summary.summary}
+          </p>
+        )}
+
         {priorities.length > 0 && (
           <div className="mt-10">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               Priorità principali
             </h2>
             <ul className="mt-4 flex flex-col gap-3">
-              {priorities.map((check) => (
+              {priorities.map((priority) => (
                 <li
-                  key={check.id}
+                  key={priority.title}
                   className="rounded-xl border border-zinc-200 px-5 py-4 text-sm text-zinc-800"
                 >
-                  {check.evidence ?? check.id}
+                  <p className="font-medium text-zinc-900">{priority.title}</p>
+                  <p className="mt-1 text-zinc-600">{priority.reason}</p>
                 </li>
               ))}
             </ul>
