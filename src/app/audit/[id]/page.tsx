@@ -4,10 +4,12 @@ import { getAudit } from "@/lib/db/auditsRepository";
 import { getSummary } from "@/lib/db/summariesRepository";
 import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
+import { GatedContent } from "@/components/GatedContent";
 import { AffiliateCta } from "@/components/AffiliateCta";
 import { TrackPageView } from "@/components/TrackPageView";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { BAND_LABELS, BAND_COLORS } from "@/features/audit/labels";
+import { isGatedVariant } from "@/features/audit/abTest";
 import type { AuditResult, Check } from "@/features/audit/types";
 
 const SEVERITY_DOT: Record<"high" | "medium" | "low", string> = {
@@ -84,10 +86,15 @@ export default async function AuditResultsPage({
     ? summary.top_priorities
     : fallbackPriorities;
   const bandColors = audit.band ? BAND_COLORS[audit.band] : null;
+  const gated = isGatedVariant(audit.id);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
-      <TrackPageView eventName="results_viewed" auditId={audit.id} />
+      <TrackPageView
+        eventName="results_viewed"
+        auditId={audit.id}
+        metadata={{ abVariant: gated ? "gated" : "open" }}
+      />
       <div className="mx-auto w-full max-w-3xl">
         <div className="flex flex-col items-start gap-6 rounded-2xl border border-zinc-200 bg-zinc-50/50 p-6 sm:flex-row sm:items-center">
           <ScoreGauge score={audit.siteScore} band={audit.band} />
@@ -142,9 +149,11 @@ export default async function AuditResultsPage({
           </div>
         )}
 
-        <div className="mt-10">
-          <EmailCaptureForm auditId={audit.id} />
-        </div>
+        {!gated && (
+          <div className="mt-10">
+            <EmailCaptureForm auditId={audit.id} source="default" />
+          </div>
+        )}
 
         {cookieConsentNeedsAttention(audit) && (
           <div className="mt-6">
@@ -156,12 +165,19 @@ export default async function AuditResultsPage({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Dettaglio per categoria
           </h2>
-          <div className="mt-4 flex flex-col gap-4">
-            {audit.categories
-              .filter((c) => c.category !== "forms")
-              .map((category) => (
-                <CategoryDetails key={category.category} category={category} />
-              ))}
+          <div className="mt-4">
+            <GatedContent auditId={audit.id} gated={gated}>
+              <div className="flex flex-col gap-4">
+                {audit.categories
+                  .filter((c) => c.category !== "forms")
+                  .map((category) => (
+                    <CategoryDetails
+                      key={category.category}
+                      category={category}
+                    />
+                  ))}
+              </div>
+            </GatedContent>
           </div>
         </div>
 

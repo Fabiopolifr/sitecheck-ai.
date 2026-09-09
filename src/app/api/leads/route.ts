@@ -15,6 +15,8 @@ const requestSchema = z.object({
   firstName: z.string().min(1).max(200).optional(),
   consentMarketing: z.boolean().default(false),
   sessionId: z.string().min(1).max(100).optional(),
+  /** Where the lead form was shown (e.g. "default", "gate") — analytics only. */
+  source: z.string().min(1).max(50).optional(),
 });
 
 function getClientKey(request: Request): string {
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { auditId, email, firstName, consentMarketing, sessionId } =
+  const { auditId, email, firstName, consentMarketing, sessionId, source } =
     parsed.data;
   const audit = await getAudit(auditId);
 
@@ -57,7 +59,12 @@ export async function POST(request: Request) {
   });
 
   if (sessionId) {
-    await saveEvent({ sessionId, auditId, eventName: "email_submitted" });
+    await saveEvent({
+      sessionId,
+      auditId,
+      eventName: "email_submitted",
+      metadata: source ? { source } : undefined,
+    });
   }
 
   const emailProvider = getEmailProvider();
@@ -70,11 +77,18 @@ export async function POST(request: Request) {
     ? `Rivedi i risultati completi qui: ${baseUrl}/audit/${audit.id}`
     : "";
 
-  await emailProvider.send({
+  const emailResult = await emailProvider.send({
     to: email,
     subject: "Il tuo report SiteCheck AI",
     text: `Grazie per aver usato SiteCheck AI. ${scoreLine} ${resultsLine}`.trim(),
   });
+
+  if (!emailResult.ok) {
+    // The lead is still saved above — a delivery failure must not lose the
+    // lead — but it needs to be visible server-side, since the client
+    // only sees a generic success ("we've sent it") once the lead exists.
+    console.error("Failed to send lead email via provider:", emailResult.error);
+  }
 
   return NextResponse.json({ id: lead.id }, { status: 201 });
 }

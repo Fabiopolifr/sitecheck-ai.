@@ -239,3 +239,57 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     resta verificato solo per lettura del codice — va confermato con un
     audit reale al primo deploy su Hostinger (vedi checklist
     `DEPLOYMENT.md`)
+
+- 2026-09-09 — Deploy reale su Hostinger (Cloud Startup + Neon), grafica,
+  accuratezza detector, esperimento A/B:
+  - deploy Node.js effettivo su Hostinger (piano Cloud Startup, non VPS —
+    nessun accesso root/SSH per gestione processi, solo il wizard "Deploy
+    Web App" del pannello); database Postgres su Neon (free tier,
+    `eu-central-1`) invece di un Postgres self-hosted, dato che Cloud
+    Startup non lo supporta
+  - `next.config.ts` → `next.config.js` e build forzata su Webpack
+    (`next build --webpack`): il server Hostinger (CloudLinux 8) non ha
+    binari nativi SWC/Turbopack compatibili con la sua glibc, né un
+    fallback WASM per Turbopack — entrambe le cause di build fallita
+    individuate dai log reali del pannello Hostinger, non ipotizzate
+  - repository GitHub: creato branch `main` e impostato come default
+    (l'importer Git di Hostinger non trovava il branch di lavoro
+    `claude/sitecheck-ai-setup-xfrrbo`); il deploy finale è comunque
+    avvenuto via upload ZIP diretto, non via import Git
+  - rinnovo grafico di landing e pagina risultati: header/footer di sito,
+    badge di fiducia, icone per categoria, gauge circolare colorato per
+    banda per il Site Score, barre di progresso per categoria — nessun
+    cambiamento alla logica di business
+  - pagine `/privacy-policy` e `/cookie-policy` con Freesbe S.r.l. come
+    titolare del trattamento (dati forniti dall'owner) e trattamenti
+    descritti in base al comportamento reale del codice, non un template
+    generico — **non revisionate legalmente**, da far controllare prima
+    di considerarle definitive
+  - rilevamento CMP ampliato da 6 a 16 piattaforme (`signals.ts`),
+    incluso Google Funding Choices/Consent Mode: prima un sito con solo
+    il consent tooling nativo di Google risultava falso-negativo su
+    "nessuna piattaforma di consenso rilevata", il check più pesante
+    dell'intero punteggio (peso 70 su 100 nella categoria Cookie &
+    Consent); aggiunti anche i tracker Google Ads, Pinterest, X/Twitter
+  - pagina risultati riordinata: cattura email e CTA affiliato subito
+    dopo le priorità principali, prima dell'accordion dettagliato (prima
+    erano in fondo pagina)
+  - esperimento A/B (D31): split 50/50 deterministico sull'`audit.id` fra
+    dettaglio per categoria sempre visibile ("open") o sbloccato via
+    email ("gated", `GatedContent`); punteggio/banda/riassunto/priorità
+    restano sempre visibili in entrambe le varianti. Evento
+    `results_viewed` porta `metadata.abVariant`, `email_submitted` porta
+    `metadata.source` ("default"/"gate") per confrontare la conversione
+    delle due varianti via query SQL su Neon
+  - `POST /api/leads`: l'esito reale dell'invio email via provider ora
+    viene controllato e loggato in caso di fallimento (prima scartato in
+    silenzio) — il lead resta comunque sempre salvato
+  - 2 nuovi test (`tests/abTest.test.ts`: determinismo dello split,
+    proporzione ~50/50 su campione di 2000), 62 test totali
+  - verificati: `npm run lint`, `npm run test` (62/62), `npm run build`
+    (webpack, tutti verdi)
+  - verifica end-to-end reale in produzione su Hostinger: audit contro un
+    sito pubblico → Site Score mostrato correttamente, riga comparsa su
+    Neon (`audits`), dashboard `/admin` con conteggi corretti; verifica
+    locale (sandbox, non Hostinger) di entrambe le varianti A/B su audit
+    reali contro `pypi.org`

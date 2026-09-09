@@ -5,9 +5,22 @@ import { getSessionId } from "@/lib/analytics/client";
 
 type EmailCaptureFormProps = {
   auditId: string;
+  /** Distinguishes where the lead came from in analytics (default vs. the A/B gate). */
+  source?: string;
+  heading?: string;
+  description?: string;
+  ctaLabel?: string;
+  onSuccess?: () => void;
 };
 
-export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
+export function EmailCaptureForm({
+  auditId,
+  source = "default",
+  heading = "Salva questo report",
+  description = "Ti mandiamo il link ai risultati via email, così puoi ritrovarli quando vuoi o condividerli con il tuo team.",
+  ctaLabel = "Invia report",
+  onSuccess,
+}: EmailCaptureFormProps) {
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
@@ -28,10 +41,16 @@ export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
           email,
           consentMarketing: consent,
           sessionId: getSessionId(),
+          source,
         }),
       });
 
-      setStatus(response.ok ? "done" : "error");
+      if (response.ok) {
+        setStatus("done");
+        onSuccess?.();
+      } else {
+        setStatus("error");
+      }
     } catch {
       setStatus("error");
     }
@@ -59,13 +78,8 @@ export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
 
   return (
     <div className="rounded-2xl border border-accent/20 bg-accent-soft px-6 py-6">
-      <h3 className="text-base font-semibold text-zinc-900">
-        Salva questo report
-      </h3>
-      <p className="mt-1 text-sm text-zinc-600">
-        Ti mandiamo il link ai risultati via email, così puoi ritrovarli
-        quando vuoi o condividerli con il tuo team.
-      </p>
+      <h3 className="text-base font-semibold text-zinc-900">{heading}</h3>
+      <p className="mt-1 text-sm text-zinc-600">{description}</p>
       <form
         onSubmit={handleSubmit}
         className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start"
@@ -84,7 +98,7 @@ export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
           disabled={status === "loading"}
           className="shrink-0 rounded-full bg-accent px-6 py-3 text-base font-medium text-white shadow-sm shadow-accent/30 transition-colors hover:bg-accent/90 disabled:opacity-60"
         >
-          {status === "loading" ? "Invio…" : "Invia report"}
+          {status === "loading" ? "Invio…" : ctaLabel}
         </button>
       </form>
       <label className="mt-3 flex items-start gap-2 text-xs text-zinc-500">

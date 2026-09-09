@@ -546,3 +546,39 @@ esistenti, non con una connessione reale a un Postgres. Prima del primo
 deploy su Hostinger, va eseguito almeno un audit reale con `DATABASE_URL`
 impostato e verificato che la riga compaia in `audits`/`audit_checks` via
 `psql`, seguendo la checklist di `DEPLOYMENT.md`.
+
+### D31 — Esperimento A/B "gate email" sul dettaglio per categoria
+
+**Decisione:** la pagina risultati (`src/app/audit/[id]/page.tsx`) applica
+uno split 50/50 deterministico (`src/features/audit/abTest.ts`,
+`isGatedVariant`, hash stabile dell'`audit.id`): metà delle analisi
+mostrano subito il dettaglio completo per categoria (variante "open",
+comportamento precedente), l'altra metà lo nasconde dietro un form email
+(`GatedContent` + `EmailCaptureForm`, variante "gated") che lo sblocca
+lato client non appena l'invio va a buon fine, senza reload di pagina.
+Punteggio, banda, riassunto AI e priorità principali restano **sempre**
+visibili in entrambe le varianti — non si nasconde il valore centrale del
+prodotto, solo l'approfondimento per categoria.
+
+**Motivazione:** richiesta esplicita dell'owner di testare se un gate
+sull'analisi approfondita aumenta la cattura email rispetto al form
+opzionale già presente. Split deterministico per `audit.id` (non un
+cookie) per restare coerenti con D24 (niente cookie extra per il
+visitatore). Ogni `results_viewed` porta ora `metadata.abVariant`
+("gated"/"open") e ogni `email_submitted` porta `metadata.source`
+("default"/"gate"), entrambi già supportati dallo schema esistente
+(`metadata: z.record(...)` in `trackEventSchema`, nessuna modifica allo
+schema DB) — permette di confrontare il tasso di conversione delle due
+varianti direttamente dalla tabella `analytics_events` (via Neon SQL
+Editor) senza dashboard dedicata, che non è stata costruita in questa
+fase per restare scoped.
+
+**Nota tecnica su invio email:** `POST /api/leads` ora verifica
+esplicitamente l'esito di `emailProvider.send(...)` e logga un
+`console.error` se fallisce (prima l'errore veniva scartato in
+silenzio). Il lead viene comunque sempre salvato anche se l'invio fallisce
+— un errore del provider email non deve far perdere il lead. L'invio
+reale via Resend richiede `EMAIL_PROVIDER=resend`, `EMAIL_API_KEY`,
+`EMAIL_FROM` configurate; senza, `mockEmailProvider` logga soltanto il
+messaggio in console (comportamento invariato, vedi D_originale su
+persistenza con fallback).
