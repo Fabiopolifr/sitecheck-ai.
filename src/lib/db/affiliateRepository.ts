@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
+import { getPool, isDatabaseConfigured } from "./pgClient";
 import {
   saveAffiliateClick as saveMemoryClick,
   listAffiliateClicks as listMemoryClicks,
@@ -31,53 +31,59 @@ export async function logAffiliateClick(
     createdAt: new Date().toISOString(),
   };
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemoryClick(record);
     return;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error } = await supabase.from("affiliate_clicks").insert({
-    id: record.id,
-    audit_id: record.auditId,
-    partner: record.partner,
-    destination: record.destination,
-    detected_issue: record.detectedIssue,
-    utm_source: record.utmSource,
-    utm_campaign: record.utmCampaign,
-    created_at: record.createdAt,
-  });
+  const pool = getPool()!;
 
-  if (error) {
-    console.error("Failed to persist affiliate click to Supabase:", error);
+  try {
+    await pool.query(
+      `insert into affiliate_clicks
+        (id, audit_id, partner, destination, detected_issue, utm_source, utm_campaign, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        record.id,
+        record.auditId,
+        record.partner,
+        record.destination,
+        record.detectedIssue,
+        record.utmSource,
+        record.utmCampaign,
+        record.createdAt,
+      ],
+    );
+  } catch (error) {
+    console.error("Failed to persist affiliate click to Postgres:", error);
     saveMemoryClick(record);
   }
 }
 
 export async function listAffiliateClicks(): Promise<AffiliateClick[]> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return listMemoryClicks();
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data, error } = await supabase
-    .from("affiliate_clicks")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const pool = getPool()!;
 
-  if (error || !data) {
-    console.error("Failed to list affiliate clicks from Supabase:", error);
+  try {
+    const result = await pool.query(
+      "select * from affiliate_clicks order by created_at desc",
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      auditId: row.audit_id,
+      partner: row.partner,
+      destination: row.destination,
+      detectedIssue: row.detected_issue,
+      utmSource: row.utm_source,
+      utmCampaign: row.utm_campaign,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error("Failed to list affiliate clicks from Postgres:", error);
     return [];
   }
-
-  return data.map((row) => ({
-    id: row.id,
-    auditId: row.audit_id,
-    partner: row.partner,
-    destination: row.destination,
-    detectedIssue: row.detected_issue,
-    utmSource: row.utm_source,
-    utmCampaign: row.utm_campaign,
-    createdAt: row.created_at,
-  }));
 }

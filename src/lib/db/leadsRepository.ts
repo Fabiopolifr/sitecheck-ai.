@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
+import { getPool, isDatabaseConfigured } from "./pgClient";
 import {
   saveLead as saveMemoryLead,
   listLeads as listMemoryLeads,
@@ -25,23 +25,28 @@ export async function saveLead(lead: NewLead): Promise<Lead> {
     createdAt: new Date().toISOString(),
   };
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemoryLead(record);
     return record;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error } = await supabase.from("leads").insert({
-    id: record.id,
-    audit_id: record.auditId,
-    email: record.email,
-    first_name: record.firstName,
-    consent_marketing: record.consentMarketing,
-    created_at: record.createdAt,
-  });
+  const pool = getPool()!;
 
-  if (error) {
-    console.error("Failed to persist lead to Supabase:", error);
+  try {
+    await pool.query(
+      `insert into leads (id, audit_id, email, first_name, consent_marketing, created_at)
+       values ($1,$2,$3,$4,$5,$6)`,
+      [
+        record.id,
+        record.auditId,
+        record.email,
+        record.firstName,
+        record.consentMarketing,
+        record.createdAt,
+      ],
+    );
+  } catch (error) {
+    console.error("Failed to persist lead to Postgres:", error);
     saveMemoryLead(record);
   }
 
@@ -49,27 +54,27 @@ export async function saveLead(lead: NewLead): Promise<Lead> {
 }
 
 export async function listLeads(): Promise<Lead[]> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return listMemoryLeads();
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const pool = getPool()!;
 
-  if (error || !data) {
-    console.error("Failed to list leads from Supabase:", error);
+  try {
+    const result = await pool.query(
+      "select * from leads order by created_at desc",
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      auditId: row.audit_id,
+      email: row.email,
+      firstName: row.first_name,
+      consentMarketing: row.consent_marketing,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error("Failed to list leads from Postgres:", error);
     return [];
   }
-
-  return data.map((row) => ({
-    id: row.id,
-    auditId: row.audit_id,
-    email: row.email,
-    firstName: row.first_name,
-    consentMarketing: row.consent_marketing,
-    createdAt: row.created_at,
-  }));
 }

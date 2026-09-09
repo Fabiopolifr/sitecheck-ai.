@@ -12,6 +12,10 @@ approvazione richiesta prima di procedere era stata posta come gate
 esplicito da questa fase (a differenza delle Phase 1–4): la spec stessa
 (§15) prevede un funzionamento a zero dati reali (modalità evergreen).
 
+Dopo Phase 5, su richiesta esplicita dell'owner: **migrazione della
+persistenza da Supabase a PostgreSQL self-hosted (VPS Hostinger)**
+completata — vedi `AI/DECISIONS.md` D30.
+
 ## Task completato
 
 Phase 5 (`AI/MASTER_SPEC.md` §15–§19):
@@ -56,6 +60,33 @@ Phase 5 (`AI/MASTER_SPEC.md` §15–§19):
   pubblicazione reale; l'app genera e mette in coda, non pubblica da
   sola (`AI/DECISIONS.md` D27).
 
+## Task completato (post-Phase 5): migrazione a PostgreSQL self-hosted
+
+Su richiesta esplicita dell'owner ("App + database, tutto su Hostinger"):
+
+- [x] rimosso `@supabase/supabase-js`, aggiunto `pg` + `@types/pg`
+- [x] `src/lib/db/pgClient.ts` (nuovo pool `pg`, SSL solo se
+      `sslmode=require` esplicito nella connection string)
+- [x] tutti e sei i repository (`auditsRepository.ts`,
+      `leadsRepository.ts`, `affiliateRepository.ts`,
+      `summariesRepository.ts`, `eventsRepository.ts`,
+      `contentRepository.ts`) riscritti con SQL parametrizzato via `pg`,
+      stesso pattern di fallback in-memory
+- [x] `src/lib/config/env.ts` aggiornato (rimosse le tre var Supabase,
+      `DATABASE_URL` validato come stringa non vuota)
+- [x] cartella `supabase/migrations/` rinominata `migrations/`
+- [x] `.env.example`, `README.md` aggiornati
+- [x] `DEPLOYMENT.md` riscritto con guida completa VPS Hostinger
+      (provisioning, Node.js 20, PostgreSQL self-managed, migration via
+      `psql`, PM2, Nginx, SSL/Certbot, firewall, backup)
+- [x] `AI/ARCHITECTURE.md`, `AI/DECISIONS.md` (nuova voce D30) aggiornati
+- [x] `npm run format`, `npm run lint`, `npm run test` (60/60),
+      `npm run build` verdi
+- [x] verifica end-to-end reale sul percorso fallback in-memory (nessun
+      Postgres live disponibile in questa sessione sandbox, stesso
+      limite già dichiarato per Supabase in D13/D21): `next dev` →
+      landing 200 → audit reale contro `pypi.org` → pagina risultati 200
+
 ## Prossimo task consigliato
 
 Non Phase 6 (SEO Engine) o Phase 7 (Ads Engine) — `AI/MASTER_SPEC.md`
@@ -64,13 +95,15 @@ lancio e con dati di conversione reali.
 
 Il lavoro applicativo utile ora è operativo, non di sviluppo:
 
-1. **Deploy reale** seguendo `DEPLOYMENT.md`.
+1. **Deploy reale su VPS Hostinger** seguendo `DEPLOYMENT.md` (app +
+   PostgreSQL entrambi self-hosted).
 2. **Raccolta di traffico reale** verso l'audit engine.
 3. Quando `content_insights` inizia a produrre insight reali (n≥30),
    **usare il flusso Claude Code + Metricool esistente** per pubblicare
    effettivamente i contenuti in coda su `/admin/content` — questo è un
    task operativo ricorrente, non una modifica al codice.
-4. Chiudere i gap di verifica noti (Supabase live, provider Anthropic
-   reale) al primo deploy.
+4. Chiudere i gap di verifica noti (connessione Postgres live, provider
+   Anthropic reale) al primo deploy, seguendo la checklist di
+   `DEPLOYMENT.md`.
 
-In attesa di indicazioni sull'owner su come procedere.
+In attesa di indicazioni dell'owner su come procedere.

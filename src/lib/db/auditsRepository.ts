@@ -1,4 +1,4 @@
-import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
+import { getPool, isDatabaseConfigured } from "./pgClient";
 import {
   getAudit as getMemoryAudit,
   saveAudit as saveMemoryAudit,
@@ -19,13 +19,13 @@ type AuditRow = {
   failure_reason: string | null;
   started_at: string;
   completed_at: string;
-  source: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
 };
 
 type AuditCheckRow = {
+  audit_id: string;
   check_id: string;
   category: Category;
   status: Check["status"];
@@ -35,27 +35,9 @@ type AuditCheckRow = {
   evidence: string | null;
 };
 
-function toAuditRow(audit: AuditResult): AuditRow {
-  return {
-    id: audit.id,
-    status: audit.status,
-    requested_url: audit.requestedUrl,
-    final_url: audit.finalUrl,
-    hostname: audit.hostname,
-    industry: audit.industry,
-    site_score: audit.siteScore,
-    band: audit.band,
-    failure_reason: audit.failureReason ?? null,
-    started_at: audit.startedAt,
-    completed_at: audit.completedAt,
-    source: null,
-    utm_source: audit.utmSource ?? null,
-    utm_medium: audit.utmMedium ?? null,
-    utm_campaign: audit.utmCampaign ?? null,
-  };
-}
-
-function toAuditCheckRows(audit: AuditResult): AuditCheckRow[] {
+function toAuditCheckRows(
+  audit: AuditResult,
+): Omit<AuditCheckRow, "audit_id">[] {
   return audit.categories.flatMap((category) =>
     category.checks.map((check) => ({
       check_id: check.id,
@@ -107,102 +89,136 @@ function fromRows(row: AuditRow, checkRows: AuditCheckRow[]): AuditResult {
 }
 
 export async function saveAudit(audit: AuditResult): Promise<void> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemoryAudit(audit);
     return;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error: auditError } = await supabase
-    .from("audits")
-    .insert(toAuditRow(audit));
+  const pool = getPool()!;
+  const client = await pool.connect();
 
-  if (auditError) {
-    console.error("Failed to persist audit to Supabase:", auditError);
-    saveMemoryAudit(audit);
-    return;
-  }
+  try {
+    await client.query("BEGIN");
 
-  const checkRows = toAuditCheckRows(audit);
-  if (checkRows.length > 0) {
-    const { error: checksError } = await supabase
-      .from("audit_checks")
-      .insert(checkRows.map((row) => ({ ...row, audit_id: audit.id })));
+    await client.query(
+      `insert into audits
+        (id, status, requested_url, final_url, hostname, industry, site_score,
+         band, failure_reason, started_at, completed_at, utm_source, utm_medium, utm_campaign)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        audit.id,
+        audit.status,
+        audit.requestedUrl,
+        audit.finalUrl,
+        audit.hostname,
+        audit.industry,
+        audit.siteScore,
+        audit.band,
+        audit.failureReason ?? null,
+        audit.startedAt,
+        audit.completedAt,
+        audit.utmSource ?? null,
+        audit.utmMedium ?? null,
+        audit.utmCampaign ?? null,
+      ],
+    );
 
-    if (checksError) {
-      console.error("Failed to persist audit checks to Supabase:", checksError);
+    const checkRows = toAuditCheckRows(audit);
+    for (const row of checkRows) {
+      await client.query(
+        `insert into audit_checks
+          (audit_id, check_id, category, status, confidence, weight, value_json, evidence)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          audit.id,
+          row.check_id,
+          row.category,
+          row.status,
+          row.confidence,
+          row.weight,
+          JSON.stringify(row.value_json),
+          row.evidence,
+        ],
+      );
     }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Failed to persist audit to Postgres:", error);
+    saveMemoryAudit(audit);
+  } finally {
+    client.release();
   }
 }
 
 export async function getAudit(id: string): Promise<AuditResult | undefined> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return getMemoryAudit(id);
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data: auditRow, error: auditError } = await supabase
-    .from("audits")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const pool = getPool()!;
 
-  if (auditError || !auditRow) {
-    if (auditError)
-      console.error("Failed to read audit from Supabase:", auditError);
+  try {
+    const auditResult = await pool.query<AuditRow>(
+      "select * from audits where id = $1",
+      [id],
+    );
+    const auditRow = auditResult.rows[0];
+    if (!auditRow) return undefined;
+
+    const checksResult = await pool.query<AuditCheckRow>(
+      `select audit_id, check_id, category, status,
+              confidence::float8 as confidence, weight::float8 as weight,
+              value_json, evidence
+       from audit_checks where audit_id = $1`,
+      [id],
+    );
+
+    return fromRows(auditRow, checksResult.rows);
+  } catch (error) {
+    console.error("Failed to read audit from Postgres:", error);
     return undefined;
   }
-
-  const { data: checkRows, error: checksError } = await supabase
-    .from("audit_checks")
-    .select("*")
-    .eq("audit_id", id);
-
-  if (checksError) {
-    console.error("Failed to read audit checks from Supabase:", checksError);
-  }
-
-  return fromRows(auditRow as AuditRow, (checkRows ?? []) as AuditCheckRow[]);
 }
 
 /** Most recent audits, newest first — used by the admin dashboard. */
 export async function listAudits(limit = 200): Promise<AuditResult[]> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return listMemoryAudits().slice(0, limit);
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data: auditRows, error: auditError } = await supabase
-    .from("audits")
-    .select("*")
-    .order("completed_at", { ascending: false })
-    .limit(limit);
+  const pool = getPool()!;
 
-  if (auditError || !auditRows) {
-    console.error("Failed to list audits from Supabase:", auditError);
+  try {
+    const auditsResult = await pool.query<AuditRow>(
+      "select * from audits order by completed_at desc limit $1",
+      [limit],
+    );
+
+    const ids = auditsResult.rows.map((row) => row.id);
+    if (ids.length === 0) return [];
+
+    const checksResult = await pool.query<AuditCheckRow>(
+      `select audit_id, check_id, category, status,
+              confidence::float8 as confidence, weight::float8 as weight,
+              value_json, evidence
+       from audit_checks where audit_id = any($1::uuid[])`,
+      [ids],
+    );
+
+    const checksByAuditId = new Map<string, AuditCheckRow[]>();
+    for (const row of checksResult.rows) {
+      const list = checksByAuditId.get(row.audit_id) ?? [];
+      list.push(row);
+      checksByAuditId.set(row.audit_id, list);
+    }
+
+    return auditsResult.rows.map((row) =>
+      fromRows(row, checksByAuditId.get(row.id) ?? []),
+    );
+  } catch (error) {
+    console.error("Failed to list audits from Postgres:", error);
     return [];
   }
-
-  const ids = auditRows.map((row) => row.id);
-  const { data: checkRows, error: checksError } = await supabase
-    .from("audit_checks")
-    .select("*")
-    .in("audit_id", ids);
-
-  if (checksError) {
-    console.error("Failed to list audit checks from Supabase:", checksError);
-  }
-
-  const checksByAuditId = new Map<string, AuditCheckRow[]>();
-  for (const row of (checkRows ?? []) as (AuditCheckRow & {
-    audit_id: string;
-  })[]) {
-    const list = checksByAuditId.get(row.audit_id) ?? [];
-    list.push(row);
-    checksByAuditId.set(row.audit_id, list);
-  }
-
-  return (auditRows as AuditRow[]).map((row) =>
-    fromRows(row, checksByAuditId.get(row.id) ?? []),
-  );
 }

@@ -9,7 +9,8 @@ progetto da Claude Code, task dopo task.
 
 Phase 5 — Content Engine completata (infrastruttura). MVP v1
 (`AI/MASTER_SPEC.md` §4) resta implementato nella sua interezza; Phase 5
-va oltre l'MVP.
+va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
+(VPS Hostinger) su richiesta dell'owner.
 
 ## Log
 
@@ -193,3 +194,48 @@ va oltre l'MVP.
     correttamente bloccato dal rate limiter, confermandone il
     funzionamento sotto carico) → rigenerazione dello stesso tipo → post
     basato su insight reale confermato in `/admin/content`
+
+- 2026-09-09 — Migrazione persistenza: Supabase → PostgreSQL self-hosted
+  (VPS Hostinger), su richiesta esplicita dell'owner ("App + database,
+  tutto su Hostinger"):
+  - rimosso `@supabase/supabase-js`, aggiunto `pg` (node-postgres) +
+    `@types/pg`; `src/lib/db/supabaseClient.ts` eliminato, sostituito da
+    `src/lib/db/pgClient.ts` (pool `pg` server-only, SSL abilitato solo
+    se `sslmode=require` è esplicito nella connection string)
+  - tutti e sei i repository (`auditsRepository.ts`, `leadsRepository.ts`,
+    `affiliateRepository.ts`, `summariesRepository.ts`,
+    `eventsRepository.ts`, `contentRepository.ts`) riscritti con SQL
+    parametrizzato via `pool.query()` (transazione esplicita
+    `BEGIN`/`COMMIT`/`ROLLBACK` per `saveAudit`, che scrive su `audits` +
+    `audit_checks` atomicamente); stesso pattern di fallback su store
+    in-memory quando `DATABASE_URL` non è configurato o una scrittura
+    fallisce
+  - `src/lib/config/env.ts`: rimosse `SUPABASE_URL`/`SUPABASE_ANON_KEY`/
+    `SUPABASE_SERVICE_ROLE_KEY`; `DATABASE_URL` validato come stringa non
+    vuota invece che `.url()` (una connection string Postgres può
+    contenere caratteri che `.url()` di Zod rifiuterebbe)
+  - cartella `supabase/migrations/` rinominata `migrations/` (SQL
+    standard, nessuna riscrittura di contenuto necessaria oltre a un
+    commento che citava la service role key)
+  - `.env.example` e `README.md` aggiornati (sezione "Configurazione
+    PostgreSQL" al posto di "Configurazione Supabase")
+  - `DEPLOYMENT.md` riscritto con una guida VPS Hostinger completa e
+    dettagliata: provisioning Ubuntu, Node.js 20, installazione e
+    configurazione PostgreSQL (bind solo su `localhost`), esecuzione
+    migration via `psql`, PM2 come process manager, Nginx come reverse
+    proxy, SSL via Certbot, firewall `ufw`, backup del database via
+    `pg_dump` pianificato (responsabilità che prima Supabase copriva
+    automaticamente)
+  - `AI/ARCHITECTURE.md` e `AI/DECISIONS.md` (nuova voce D30, con
+    riferimenti incrociati aggiornati su D3, D13, D15) aggiornati
+  - verificati: `npm run format`, `npm run lint`, `npm run test`
+    (60/60), `npm run build` (tutti verdi)
+  - verifica end-to-end reale limitata al percorso di fallback in-memory
+    (nessun server PostgreSQL live disponibile in questa sessione
+    sandbox, stesso limite già dichiarato per Supabase in D13/D21):
+    `next dev` avviato, landing page 200, audit reale contro
+    `https://pypi.org` inviato con successo, pagina risultati
+    raggiungibile con HTTP 200. Il percorso `DATABASE_URL` configurato
+    resta verificato solo per lettura del codice — va confermato con un
+    audit reale al primo deploy su Hostinger (vedi checklist
+    `DEPLOYMENT.md`)

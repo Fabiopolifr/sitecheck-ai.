@@ -7,7 +7,8 @@ prese durante lo sviluppo di SiteCheck AI, con relative motivazioni.
 
 ## Stato
 
-Phase 5 — Content Engine completata (infrastruttura).
+Phase 5 — Content Engine completata (infrastruttura). Persistenza
+migrata da Supabase a PostgreSQL self-hosted (D30).
 
 ## Decisioni
 
@@ -29,7 +30,7 @@ nella root del repository è stato spostato in `AI/MASTER_SPEC.md`.
 come posizione canonica della specifica di prodotto. Mantenere due copie
 avrebbe creato rischio di disallineamento.
 
-### D3 — Database: PostgreSQL via Supabase (decisione preliminare)
+### D3 — Database: PostgreSQL via Supabase (decisione preliminare, superata da D30)
 
 **Decisione:** per la persistenza (Phase 2) si userà PostgreSQL, con
 Supabase come provider preferito (DB gestito + Auth + free tier).
@@ -41,7 +42,10 @@ riduzione del tempo di sviluppo. L'accesso al DB sarà comunque isolato in
 necessario in futuro.
 
 **Nota:** nessuna integrazione Supabase è stata implementata in Phase 0.
-Questa è una decisione di indirizzo per Phase 2.
+Questa è una decisione di indirizzo per Phase 2. **Superata da D30**:
+l'owner ha scelto di ospitare app e database entrambi su un VPS Hostinger
+invece di Supabase; l'isolamento in `src/lib/db/` previsto qui è esattamente
+ciò che ha reso possibile il passaggio senza toccare il resto del codice.
 
 ### D4 — Environment validation con Zod, tutti i campi opzionali in Phase 0
 
@@ -167,22 +171,26 @@ breakdown per categoria coerente. Su un hosting di produzione normale
 pubblico che superi la validazione SSRF — nessuna modifica al codice è
 necessaria.
 
-### D13 — Persistenza Supabase con fallback automatico in-memory
+### D13 — Persistenza con fallback automatico in-memory (Supabase inizialmente, poi PostgreSQL self-hosted — vedi D30)
 
-**Decisione:** i repository in `src/lib/db/` (`auditsRepository.ts`,
-`leadsRepository.ts`, `affiliateRepository.ts`) usano Supabase quando
-`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` sono configurate, altrimenti
-ricadono trasparentemente sugli store in-memory di Phase 1/2. Se una
-scrittura su Supabase fallisce a runtime, l'errore viene loggato e il
-dato viene comunque salvato in-memory invece di far fallire la richiesta.
+**Decisione:** i repository in `src/lib/db/` usano il database quando
+configurato, altrimenti ricadono trasparentemente sugli store in-memory
+di Phase 1/2. Se una scrittura sul database fallisce a runtime, l'errore
+viene loggato e il dato viene comunque salvato in-memory invece di far
+fallire la richiesta.
 
 **Motivazione:** coerenza con la decisione D4 (Phase 0) — build, test e
 `next dev` devono funzionare senza credenziali reali. Non avendo accesso
-a un progetto Supabase live in questa sessione di sviluppo, il fallback è
-anche l'unico modo per verificare end-to-end il comportamento
+a un database live in questa sessione di sviluppo, il fallback è anche
+l'unico modo per verificare end-to-end il comportamento
 dell'applicazione in questa fase (vedi anche D12). L'owner può attivare
-Supabase in qualunque momento impostando le due env var, senza modifiche
-al codice.
+la persistenza reale in qualunque momento impostando `DATABASE_URL`,
+senza modifiche al codice.
+
+**Nota:** originariamente il gate era `SUPABASE_URL` +
+`SUPABASE_SERVICE_ROLE_KEY` (client `@supabase/supabase-js`); dopo D30 il
+gate è `DATABASE_URL` (client `pg` generico). Il comportamento di
+fallback descritto qui non è cambiato, solo il backend concreto.
 
 ### D14 — `audit_checks` come tabella separata, non solo JSONB su `audits`
 
@@ -196,21 +204,23 @@ per l'admin dashboard ("problemi più rilevati", "tecnologie più rilevate")
 e, in futuro, per il content engine (§15–§19) che deve poter interrogare
 "quanti siti hanno il check X in stato fail" senza deserializzare JSON.
 
-### D15 — Admin: gate a password singola con cookie firmato, non Supabase Auth
+### D15 — Admin: gate a password singola con cookie firmato, non un provider Auth gestito
 
 **Decisione:** l'accesso a `/admin` è protetto da una password singola
 (env var `ADMIN_PASSWORD`) con sessione in un cookie HttpOnly firmato via
-HMAC-SHA256 (`src/lib/security/adminAuth.ts`), non da Supabase Auth.
+HMAC-SHA256 (`src/lib/security/adminAuth.ts`), non da un servizio Auth
+gestito come Supabase Auth.
 
 **Motivazione:** `AI/MASTER_SPEC.md` §13 dice "Use Supabase Auth **if**
-Supabase is adopted" — una raccomandazione condizionale, non un obbligo.
-Supabase Auth richiederebbe un progetto Supabase live per essere
-verificato (flusso email/password o magic link), non disponibile in
-questa sessione di sviluppo. Un gate a password singola con cookie
-firmato è: sufficiente per un solo utente admin (esplicitamente permesso
-dalla spec), a costo zero, verificabile interamente senza servizi esterni,
-e sostituibile con Supabase Auth in una fase futura senza cambiare la
-superficie della dashboard. La firma usa confronto a tempo costante
+Supabase is adopted" — una raccomandazione condizionale, non un obbligo,
+e comunque superata da D30 (Supabase non più adottato). Un servizio Auth
+gestito richiederebbe comunque un progetto live per essere verificato
+(flusso email/password o magic link), non disponibile in questa sessione
+di sviluppo. Un gate a password singola con cookie firmato è: sufficiente
+per un solo utente admin (esplicitamente permesso dalla spec), a costo
+zero, verificabile interamente senza servizi esterni, e coerente con
+l'infrastruttura self-hosted scelta in D30 (nessuna dipendenza Auth
+esterna da configurare sul VPS). La firma usa confronto a tempo costante
 (`timingSafeEqual`) per evitare timing attack sulla verifica.
 
 ### D16 — Convenzione `proxy.ts`, non `middleware.ts`
@@ -468,3 +478,71 @@ minuto, Phase 1) — comportamento corretto, non un bug — ed è stato
 necessario invece scaglionare le richieste rispettando il limite. Questo
 conferma indirettamente che il rate limiting introdotto in Phase 1
 funziona come progettato anche sotto carico concentrato.
+
+### D30 — Migrazione da Supabase a PostgreSQL self-hosted (VPS Hostinger)
+
+**Decisione:** l'intero layer di persistenza è stato riscritto da
+`@supabase/supabase-js` a `pg` (node-postgres) generico, parlando SQL
+puro contro qualunque istanza PostgreSQL raggiungibile. `.env.example`,
+`README.md` e `DEPLOYMENT.md` sono stati aggiornati di conseguenza, e la
+cartella `supabase/migrations/` è stata rinominata `migrations/` (SQL
+standard, nessuna sintassi specifica di Supabase al suo interno, quindi
+nessuna riscrittura del contenuto necessaria oltre a un commento che
+citava la service role key).
+
+**Motivazione:** richiesta esplicita dell'owner: ospitare sia l'app sia
+il database interamente su un VPS Hostinger invece di usare Supabase come
+servizio gestito esterno, per restare su infrastruttura a costo minimo e
+sotto controllo diretto (coerente con `CLAUDE.md`: "preferire servizi
+free-tier e infrastruttura a costo minimo"). Hostinger non offre Supabase
+come servizio; un VPS supporta però un Postgres self-managed collegato
+all'app tramite una normale connection string.
+
+**Cosa è cambiato concretamente:**
+- `src/lib/db/supabaseClient.ts` eliminato, sostituito da
+  `src/lib/db/pgClient.ts` (pool `pg`, `isDatabaseConfigured()` basato su
+  `DATABASE_URL`, SSL abilitato solo se la connection string contiene
+  esplicitamente `sslmode=require` — un Postgres self-managed sullo
+  stesso VPS tipicamente non ha un listener TLS).
+- Tutti e sei i repository (`auditsRepository.ts`, `leadsRepository.ts`,
+  `affiliateRepository.ts`, `summariesRepository.ts`,
+  `eventsRepository.ts`, `contentRepository.ts`) riscritti con SQL
+  parametrizzato via `pool.query()`/transazioni esplicite (`saveAudit`
+  usa `BEGIN`/`COMMIT`/`ROLLBACK` su un singolo client per l'inserimento
+  atomico di `audits` + `audit_checks`), stesso pattern di fallback su
+  store in-memory in caso di errore o database non configurato.
+- `src/lib/config/env.ts`: rimossi `SUPABASE_URL`/`SUPABASE_ANON_KEY`/
+  `SUPABASE_SERVICE_ROLE_KEY`; `DATABASE_URL` validato con
+  `z.string().min(1)` invece di `.url()` (una connection string Postgres
+  può contenere caratteri che lo schema `.url()` di Zod rifiuterebbe; la
+  validazione reale avviene comunque alla connessione da parte di `pg`).
+- `package.json`: rimossa `@supabase/supabase-js`, aggiunte `pg` +
+  `@types/pg`.
+- Nuova sezione `DEPLOYMENT.md` con guida passo-passo VPS Hostinger:
+  provisioning, Node.js 20, installazione/config PostgreSQL (bind solo su
+  `localhost`, mai esposto pubblicamente), esecuzione migration via
+  `psql`, PM2 come process manager, Nginx come reverse proxy, SSL via
+  Certbot, firewall (`ufw`), backup del database (`pg_dump` pianificato —
+  responsabilità che prima Supabase copriva automaticamente e ora ricade
+  sull'operatore del VPS).
+
+**Nota tecnica su un gotcha di node-postgres:** le colonne `numeric` di
+Postgres (usate per `confidence`/`weight` in `audit_checks`) vengono
+ritornate come stringhe JS da `pg` per default (per non perdere
+precisione); le query `SELECT` che le leggono usano un cast esplicito
+`::float8`. Le colonne `jsonb` vengono invece già deserializzate
+automaticamente in lettura, ma richiedono `JSON.stringify()` esplicito
+quando passate come parametro in un `INSERT`/`UPDATE` — `pg` non serializza
+automaticamente gli oggetti JS lato client come farebbe un client
+Supabase più opinionato.
+
+**Cosa NON è stato verificato end-to-end in questa sessione:** non è
+disponibile un server PostgreSQL live in questo ambiente sandbox (stesso
+limite già dichiarato per Supabase in D13/D21) — solo il percorso di
+fallback in-memory è stato verificato con l'app reale (build, lint, test,
+avvio dev server). Il percorso `DATABASE_URL` configurato è stato
+verificato per lettura del codice e tramite i type-check/test unitari
+esistenti, non con una connessione reale a un Postgres. Prima del primo
+deploy su Hostinger, va eseguito almeno un audit reale con `DATABASE_URL`
+impostato e verificato che la riga compaia in `audits`/`audit_checks` via
+`psql`, seguendo la checklist di `DEPLOYMENT.md`.

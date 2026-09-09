@@ -14,8 +14,8 @@ Vedi `AI/MASTER_SPEC.md` per la specifica completa di prodotto,
 - TypeScript (strict)
 - Tailwind CSS v4
 - Zod (validazione env/schema)
-- Supabase (`@supabase/supabase-js`) — opzionale in sviluppo, fallback
-  automatico su store in-memory se non configurato
+- PostgreSQL (`pg`, self-managed — es. su un VPS Hostinger) — opzionale
+  in sviluppo, fallback automatico su store in-memory se non configurato
 - `@anthropic-ai/sdk` — opzionale, fallback deterministico se non
   configurato
 - Vitest (test)
@@ -38,23 +38,28 @@ lead ed eventi affiliati vengono salvati in memoria (non persistono al
 riavvio) e le email vengono solo loggate in console. Utile per sviluppo
 locale rapido.
 
-## Configurazione Supabase (persistenza reale)
+## Configurazione PostgreSQL (persistenza reale)
 
-Per abilitare la persistenza reale:
+L'app parla Postgres puro (via `pg`, nessun client proprietario): va bene
+qualunque istanza, inclusa una self-managed su un VPS Hostinger. Per la
+guida completa al deploy su Hostinger vedi `DEPLOYMENT.md`.
 
-1. Crea un progetto su [supabase.com](https://supabase.com) (free tier).
-2. Nel SQL Editor del progetto, esegui in ordine tutti i file in
-   `supabase/migrations/` (`0001_init.sql`, `0002_audit_summaries.sql`,
-   `0003_analytics_events.sql`, `0004_content_engine.sql`).
+Per abilitare la persistenza reale in locale/sviluppo:
+
+1. Avvia un Postgres (locale, Docker, o un'istanza remota).
+2. Esegui in ordine tutti i file in `migrations/` (`0001_init.sql`,
+   `0002_audit_summaries.sql`, `0003_analytics_events.sql`,
+   `0004_content_engine.sql`), ad esempio:
+   ```bash
+   for f in migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+   ```
 3. In `.env.local`, imposta:
    ```env
-   SUPABASE_URL=https://<project-ref>.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY=<service role key, non la anon key>
+   DATABASE_URL=postgres://user:password@host:5432/sitecheck_ai
    ```
 4. Riavvia l'app: da questo momento audit, lead e click affiliati
-   vengono scritti su Postgres. `SUPABASE_SERVICE_ROLE_KEY` è un segreto
-   con accesso completo al database — non esporlo mai al client, non
-   committarlo, non usarlo in codice che gira nel browser.
+   vengono scritti su Postgres. `DATABASE_URL` contiene le credenziali del
+   database — non esporlo mai al client, non committarlo.
 
 ## Configurazione admin
 

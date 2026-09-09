@@ -7,7 +7,10 @@ per i dettagli implementativi di ogni componente citato qui.
 
 L'app è un progetto Next.js 16 standard (App Router). Non richiede nulla
 di esotico — qualunque hosting che soddisfi questi requisiti va bene
-(Vercel, Netlify, un VPS con Node, un container):
+(Vercel, Netlify, un VPS con Node, un container). Questa guida copre nel
+dettaglio l'opzione **VPS Hostinger** (app + PostgreSQL entrambi
+self-hosted), scelta esplicita del progetto per restare su infrastruttura
+a costo minimo (vedi `AI/DECISIONS.md`).
 
 - **Node.js 20+** in esecuzione lato server (non è compatibile con
   export statico: usa route handler dinamici, `proxy.ts` e pagine
@@ -16,13 +19,191 @@ di esotico — qualunque hosting che soddisfi questi requisiti va bene
   dentro le richieste HTTP (audit, generazione summary AI, invio email).
   Non serve un sistema di code.
 - **Nessuno storage persistente su filesystem locale**: tutto lo stato
-  vive su Supabase (quando configurato) o in memoria di processo. Un
+  vive su PostgreSQL (quando configurato) o in memoria di processo. Un
   hosting stateless/serverless va bene, con l'unico caveat che senza
-  Supabase configurato i dati in memoria non sopravvivono a un riavvio o
-  a più istanze — per questo **Supabase è fortemente raccomandato in
-  produzione**, non solo opzionale come in sviluppo.
+  `DATABASE_URL` configurato i dati in memoria non sopravvivono a un
+  riavvio o a più istanze — per questo **un database Postgres è
+  fortemente raccomandato in produzione**, non solo opzionale come in
+  sviluppo.
 - **`proxy.ts` richiede runtime Node.js**: supportato da hosting Node
-  standard e container; non da adapter edge-only.
+  standard, VPS e container; non da adapter edge-only.
+
+Nota: l'hosting **condiviso** Hostinger (shared hosting) non supporta
+processi Node.js persistenti né un server PostgreSQL self-managed — serve
+un **piano VPS** (Hostinger VPS, qualunque taglia con almeno 1 vCPU / 1GB
+RAM per iniziare va bene per il volume "lean" atteso in questa fase).
+
+## Guida: VPS Hostinger (app + database)
+
+### 1. Provisioning del VPS
+
+1. Crea un piano VPS Hostinger con immagine **Ubuntu 22.04 LTS** (o
+   successiva).
+2. Accedi via SSH come root, poi crea un utente non-root dedicato:
+   ```bash
+   adduser sitecheck
+   usermod -aG sudo sitecheck
+   su - sitecheck
+   ```
+3. Aggiorna il sistema:
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+### 2. Installa Node.js 20
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v   # deve riportare v20.x o superiore
+```
+
+### 3. Installa e configura PostgreSQL
+
+```bash
+sudo apt install -y postgresql postgresql-contrib
+sudo -u postgres psql
+```
+
+Nella shell `psql`:
+
+```sql
+CREATE DATABASE sitecheck_ai;
+CREATE USER sitecheck WITH ENCRYPTED PASSWORD '<password robusta>';
+GRANT ALL PRIVILEGES ON DATABASE sitecheck_ai TO sitecheck;
+\c sitecheck_ai
+GRANT ALL ON SCHEMA public TO sitecheck;
+\q
+```
+
+Per impostazione predefinita PostgreSQL su Ubuntu ascolta solo su
+`localhost` (`listen_addresses = 'localhost'` in
+`/etc/postgresql/*/main/postgresql.conf`) — corretto per questo setup,
+dato che l'app gira sulla stessa macchina: **non esporre la porta 5432
+pubblicamente**. Se l'app e il database restano sullo stesso VPS non
+serve TLS tra loro (nessun traffico lascia la macchina); la connection
+string non deve quindi includere `sslmode=require` (vedi
+`src/lib/db/pgClient.ts`, che lo attiva solo se esplicitamente richiesto
+nella stringa).
+
+### 4. Esegui le migration
+
+Clona il repository sul VPS (o trasferisci solo la cartella
+`migrations/`), poi:
+
+```bash
+cd sitecheck-ai
+for f in migrations/*.sql; do
+  psql "postgres://sitecheck:<password>@localhost:5432/sitecheck_ai" -f "$f"
+done
+```
+
+Esegui i file **in ordine** (`0001_init.sql`, `0002_audit_summaries.sql`,
+`0003_analytics_events.sql`, `0004_content_engine.sql`) — dipendono l'uno
+dall'altro. Verifica che non ci siano errori prima di procedere.
+
+### 5. Clona e builda l'app
+
+```bash
+git clone <url-del-repo> sitecheck-ai
+cd sitecheck-ai
+npm ci
+```
+
+Crea `.env` (non `.env.local` in produzione — vedi sezione variabili
+d'ambiente sotto) con almeno:
+
+```env
+DATABASE_URL=postgres://sitecheck:<password>@localhost:5432/sitecheck_ai
+ADMIN_PASSWORD=<password robusta, diversa da sviluppo>
+APP_URL=https://tuodominio.it
+```
+
+Build di produzione:
+
+```bash
+npm run build
+```
+
+### 6. Process manager (PM2)
+
+```bash
+sudo npm install -g pm2
+pm2 start npm --name sitecheck-ai -- start
+pm2 save
+pm2 startup   # segui l'istruzione stampata per abilitare l'avvio al boot
+```
+
+L'app di default ascolta su `localhost:3000` (`npm run start` / `next
+start`); PM2 la mantiene viva e la riavvia in caso di crash.
+
+### 7. Reverse proxy Nginx + SSL
+
+```bash
+sudo apt install -y nginx
+```
+
+Crea `/etc/nginx/sites-available/sitecheck-ai`:
+
+```nginx
+server {
+    listen 80;
+    server_name tuodominio.it;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/sitecheck-ai /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Punta il DNS del dominio (record A) all'IP del VPS Hostinger, poi abilita
+HTTPS con Certbot:
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d tuodominio.it
+```
+
+Certbot configura automaticamente Nginx per HTTPS e imposta il rinnovo
+automatico del certificato.
+
+### 8. Firewall
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+```
+
+Non esporre mai direttamente la porta 3000 (Next.js) o 5432 (Postgres) a
+Internet: solo Nginx (80/443) deve essere raggiungibile dall'esterno.
+
+### 9. Aggiornamenti successivi
+
+```bash
+cd sitecheck-ai
+git pull
+npm ci
+npm run build
+pm2 restart sitecheck-ai
+```
+
+Se una nuova release aggiunge migration, eseguile (in ordine, solo quelle
+non ancora applicate) prima del restart.
 
 ## Variabili d'ambiente
 
@@ -30,9 +211,9 @@ Vedi `.env.example` per l'elenco completo. Minimo raccomandato per un
 lancio reale (oltre a quanto già funziona senza configurazione):
 
 ```env
-# Persistenza reale — vedi README "Configurazione Supabase"
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+# Persistenza reale — vedi README "Configurazione PostgreSQL" e la guida
+# Hostinger sopra
+DATABASE_URL=postgres://sitecheck:<password>@localhost:5432/sitecheck_ai
 
 # Dashboard admin
 ADMIN_PASSWORD=
@@ -66,27 +247,24 @@ CONTENT_GENERATION_SECRET=
 ```
 
 **Mai** committare valori reali di queste variabili nel repository.
-`SUPABASE_SERVICE_ROLE_KEY` in particolare ha accesso completo al
-database e bypassa la Row Level Security — trattalo come una password di
-root.
+`DATABASE_URL` in particolare contiene le credenziali complete del
+database — trattalo come una password di root.
 
 ## Checklist pre-lancio
 
 1. **Build pulita**: `npm ci && npm run lint && npm run test && npm run build`
    devono passare senza errori.
-2. **Migration Supabase**: esegui in ordine tutti i file in
-   `supabase/migrations/` (attualmente `0001_init.sql`, poi
-   `0002_audit_summaries.sql`, poi `0003_analytics_events.sql`, poi
-   `0004_content_engine.sql`) sul progetto Supabase di produzione,
-   tramite il SQL Editor o la CLI Supabase. Verifica che le tabelle
-   abbiano RLS abilitata (le migration la abilitano già) e nessuna
-   policy pubblica: l'unico accesso previsto è tramite la service role
-   key lato server.
+2. **Migration**: esegui in ordine tutti i file in `migrations/`
+   (attualmente `0001_init.sql`, poi `0002_audit_summaries.sql`, poi
+   `0003_analytics_events.sql`, poi `0004_content_engine.sql`) sul
+   database Postgres di produzione, tramite `psql` (vedi guida sopra).
+   Il database non ha alcun accesso pubblico: l'unico accesso previsto è
+   dall'app stessa, tramite `DATABASE_URL` (rete locale/privata sullo
+   stesso VPS).
 3. **`ADMIN_PASSWORD`**: imposta una password robusta, diversa da quella
    usata in sviluppo. La dashboard `/admin` è protetta da un singolo
    cookie firmato HMAC — non è un sistema multi-utente (vedi
-   `AI/DECISIONS.md` D15 per il perché di questa scelta invece di
-   Supabase Auth in questa fase).
+   `AI/DECISIONS.md` D15 per il perché di questa scelta).
 4. **Smoke test manuale post-deploy**: esegui un audit reale contro un
    sito pubblico, verifica che la pagina risultati mostri uno score e un
    riassunto, invia un'email di test dal form di cattura lead, e apri
@@ -99,17 +277,27 @@ root.
    va investigata).
 6. **Rate limiting**: gli endpoint pubblici (`/api/audit`, `/api/leads`,
    `/api/events`, `/api/admin/login`) hanno un rate limit in-memory per
-   IP (vedi `src/lib/security/rateLimit.ts`). Su un hosting con più
-   istanze/repliche, il limite è per-istanza, non globale — accettabile
-   per il volume di traffico atteso in questa fase; da rivedere se il
-   traffico cresce (es. store condiviso Redis).
+   IP (vedi `src/lib/security/rateLimit.ts`). Su un singolo processo PM2
+   (come nella guida Hostinger sopra) il limite è già effettivamente
+   globale; se in futuro si passa a più istanze, da rivedere (es. store
+   condiviso Redis).
 7. **Content engine (opzionale)**: se `CONTENT_GENERATION_SECRET` è
-   impostato, configura uno scheduler esterno (Vercel Cron o
-   equivalente) che chiami `POST /api/content/generate` con header
-   `x-content-secret`, secondo la cadenza desiderata (l'app stessa non
-   pianifica nulla). I post generati restano in coda su
-   `/admin/content`: la pubblicazione reale avviene tramite il flusso
-   Claude Code + Metricool esistente, non automaticamente.
+   impostato, configura uno scheduler esterno (un cron job sul VPS stesso
+   con `curl`, o un servizio esterno) che chiami `POST
+/api/content/generate` con header `x-content-secret`, secondo la
+   cadenza desiderata (l'app stessa non pianifica nulla). I post generati
+   restano in coda su `/admin/content`: la pubblicazione reale avviene
+   tramite il flusso Claude Code + Metricool esistente, non
+   automaticamente.
+8. **Backup del database**: su un Postgres self-managed i backup sono a
+   carico tuo (Supabase li includeva). Imposta almeno un `pg_dump`
+   pianificato via cron, es.:
+   ```bash
+   pg_dump "postgres://sitecheck:<password>@localhost:5432/sitecheck_ai" \
+     | gzip > /home/sitecheck/backups/sitecheck_ai_$(date +%F).sql.gz
+   ```
+   e ruota/copia altrove i file periodicamente (non lasciarli solo sul
+   VPS che stai facendo il backup di).
 
 ## Cosa NON è ancora pronto per un lancio ad alto traffico
 
@@ -117,9 +305,11 @@ root.
   questi step è lento, allunga la risposta di `POST /api/audit`. Con
   Haiku 4.5 e Resend la latenza aggiuntiva è tipicamente contenuta, ma
   vale la pena monitorarla.
-- Il rate limiter è per-istanza (vedi sopra).
+- Il rate limiter è per-processo (vedi sopra).
 - Nessun sistema di cache per audit ripetuti sullo stesso URL — ogni
   richiesta rifà fetch + parsing + detector da zero.
+- Nessun backup automatico del database out-of-the-box: va configurato
+  manualmente (vedi checklist punto 8).
 
 Nessuno di questi è un blocco per un lancio in piccola scala (coerente
 col budget e l'obiettivo "lean" di `AI/MASTER_SPEC.md` §1); sono punti

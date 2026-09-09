@@ -10,6 +10,9 @@ esterne. Va aggiornato ogni volta che l'architettura cambia.
 
 Phase 5 — Content Engine completata (infrastruttura; generazione ancora
 prevalentemente evergreen finché non esistono abbastanza audit reali).
+Migrazione della persistenza da Supabase a PostgreSQL self-hosted
+(Hostinger VPS) completata su richiesta esplicita dell'owner — vedi
+`AI/DECISIONS.md` D30.
 
 ## Stack tecnologico
 
@@ -21,9 +24,11 @@ prevalentemente evergreen finché non esistono abbastanza audit reali).
 - **Parsing HTML:** Cheerio
 - **HTTP client con controllo socket-level:** undici (`Agent` con `connect.lookup`
   personalizzato, per il pinning DNS anti-SSRF-rebinding)
-- **Database:** PostgreSQL via Supabase (`@supabase/supabase-js`, client
-  service-role server-only). Fallback automatico a persistenza in-memory
-  quando Supabase non è configurato (vedi `AI/DECISIONS.md`)
+- **Database:** PostgreSQL self-managed via `pg` (node-postgres, pool
+  server-only, nessun client proprietario — compatibile con qualunque
+  istanza Postgres, tipicamente self-hosted su un VPS Hostinger). Fallback
+  automatico a persistenza in-memory quando `DATABASE_URL` non è
+  configurato (vedi `AI/DECISIONS.md`)
 - **AI:** `@anthropic-ai/sdk`, provider Anthropic dietro un'interfaccia
   provider-agnostica; fallback deterministico sempre disponibile
 - **Lint:** ESLint 9 (flat config, `eslint-config-next`)
@@ -55,15 +60,14 @@ prevalentemente evergreen finché non esistono abbastanza audit reali).
 │   │   └── content/        # Motore contenuti: insight, evergreen, scheduler (Phase 5)
 │   ├── lib/
 │   │   ├── config/         # Configurazione centralizzata (env.ts)
-│   │   ├── db/             # Repository Supabase + fallback in-memory
+│   │   ├── db/             # Repository PostgreSQL (pg) + fallback in-memory
 │   │   ├── email/          # Adapter email provider-agnostico (Phase 2)
 │   │   ├── ai/             # Layer AI provider-agnostico (Phase 3)
 │   │   ├── analytics/      # Vocabolario eventi + tracker client (Phase 4)
 │   │   ├── social/         # Adapter publisher provider-agnostico (Phase 5)
 │   │   └── security/       # SSRF guard, rate limiting, admin auth
 │   └── proxy.ts            # Guard di autenticazione per /admin (Phase 2)
-├── supabase/
-│   └── migrations/         # Schema SQL (Phase 2, 3, 4, 5)
+├── migrations/              # Schema SQL PostgreSQL (Phase 2, 3, 4, 5)
 ├── scripts/                # Script operativi futuri
 ├── tests/                  # Test Vitest
 ├── public/                 # Asset statici
@@ -137,29 +141,35 @@ Flusso end-to-end (`src/features/audit/runAudit.ts`):
    in-memory agganciata a `globalThis` (necessario perché Next.js compila
    route handler e pagine come grafi di moduli separati: un semplice
    modulo-singleton non sarebbe condiviso fra `/api/audit` e
-   `/audit/[id]`). Non durevole, sostituita da Supabase in Phase 2.
+   `/audit/[id]`). Non durevole, sostituita da PostgreSQL in Phase 2.
 10. **UI risultati** (`src/app/audit/[id]/page.tsx`) — Site Score, banda,
     3 priorità principali, card per categoria con progressive disclosure
     (`<details>`/`<summary>`), wording italiano non-legale.
 
-## Persistenza (Phase 2)
+## Persistenza (Phase 2, migrata a PostgreSQL self-hosted)
 
 Ogni repository in `src/lib/db/` (`auditsRepository.ts`,
-`leadsRepository.ts`, `affiliateRepository.ts`) sceglie il backend una
-volta per chiamata, in base a `isSupabaseConfigured()`
-(`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` presenti):
+`leadsRepository.ts`, `affiliateRepository.ts`, `summariesRepository.ts`,
+`eventsRepository.ts`, `contentRepository.ts`) sceglie il backend una
+volta per chiamata, in base a `isDatabaseConfigured()` (`DATABASE_URL`
+presente):
 
-- **Supabase configurato:** legge/scrive su PostgreSQL via
-  `@supabase/supabase-js`, usando la service role key. Il client
-  (`src/lib/db/supabaseClient.ts`) non viene mai esposto al browser. Le
-  tabelle (`supabase/migrations/0001_init.sql`) hanno RLS abilitata senza
-  policy pubbliche: l'unico accesso passa dal server con la service role
-  key, che bypassa RLS by design.
-- **Supabase non configurato:** fallback trasparente su store in-memory
-  agganciati a `globalThis` (stesso pattern di `memoryAuditStore.ts`,
-  Phase 1) — permette a build, test e `next dev` di funzionare senza
-  credenziali, coerentemente con la decisione D4 (Phase 0).
-- Se una scrittura su Supabase fallisce (errore di rete, tabella
+- **`DATABASE_URL` configurato:** legge/scrive su PostgreSQL via `pg`
+  (node-postgres), tramite un pool di connessioni condiviso
+  (`src/lib/db/pgClient.ts`, mai esposto al browser — server-only). SQL
+  parametrizzato, nessun ORM. Compatibile con qualunque istanza Postgres
+  raggiungibile dalla stringa di connessione: tipicamente un'istanza
+  self-managed sullo stesso VPS Hostinger che ospita l'app (vedi
+  `DEPLOYMENT.md`), ma funziona identicamente contro qualsiasi altro
+  Postgres. Le tabelle (`migrations/0001_init.sql`) hanno RLS abilitata
+  senza policy pubbliche come difesa in profondità; l'isolamento primario
+  è che il database non è raggiungibile dall'esterno (nessuna porta
+  pubblica), solo dal processo server tramite `DATABASE_URL`.
+- **`DATABASE_URL` non configurato:** fallback trasparente su store
+  in-memory agganciati a `globalThis` (stesso pattern di
+  `memoryAuditStore.ts`, Phase 1) — permette a build, test e `next dev` di
+  funzionare senza credenziali, coerentemente con la decisione D4 (Phase 0).
+- Se una scrittura su Postgres fallisce (errore di rete, tabella
   mancante), il codice logga l'errore e ricade sullo store in-memory
   invece di far fallire la richiesta dell'utente.
 
@@ -248,7 +258,7 @@ Orchestrazione (`src/features/audit/aiSummary.ts`,
    ricade sullo stesso template deterministico. La funzione non lancia
    mai eccezioni: l'audit non dipende mai dalla disponibilità dell'AI.
 
-Persistenza: `audit_summaries` (`supabase/migrations/0002_audit_summaries.sql`),
+Persistenza: `audit_summaries` (`migrations/0002_audit_summaries.sql`),
 con fallback in-memory (`src/lib/db/summariesRepository.ts`, stesso
 pattern `globalThis` delle altre repository). Generata una volta per
 audit completato, subito dopo `saveAudit` in `POST /api/audit` — una
@@ -277,7 +287,7 @@ salvati prima di questa fase).
   legge `utm_source`/`utm_medium`/`utm_campaign` dalla query string.
 
 Persistenza: `analytics_events`
-(`supabase/migrations/0003_analytics_events.sql` + fallback in-memory,
+(`migrations/0003_analytics_events.sql` + fallback in-memory,
 `src/lib/db/eventsRepository.ts`, stesso pattern delle altre repository).
 
 Dove ogni evento viene emesso:
@@ -340,7 +350,7 @@ affiliato → login admin → dashboard con conteggi e tassi corretti.
   esplicita, non un'omissione).
 
 Persistenza: `content_posts`, `content_insights`, `content_publications`
-(`supabase/migrations/0004_content_engine.sql` + fallback in-memory,
+(`migrations/0004_content_engine.sql` + fallback in-memory,
 `src/lib/db/contentRepository.ts`).
 
 Generazione: `POST /api/content/generate`
@@ -378,11 +388,13 @@ diretta con l'API Metricool.
 ## Deployment
 
 Vedi `DEPLOYMENT.md` per la guida completa (variabili d'ambiente,
-migration da eseguire, checklist pre-lancio). In sintesi: nessuna
-decisione di hosting è vincolante — l'app è compatibile con qualsiasi
-hosting Node.js che supporti Next.js (Vercel, Netlify, VPS con Node 20+,
-container); non si assume Vercel come requisito, come da
-`AI/MASTER_SPEC.md` §24. `proxy.ts` richiede un runtime Node.js
-(supportato da Node.js server e container; non da static export). Non ci
-sono job in background: tutto avviene sincronamente dentro le richieste
-HTTP, coerentemente con `AI/MASTER_SPEC.md` §40.
+migration da eseguire, checklist pre-lancio, guida dettagliata al deploy
+su VPS Hostinger con app + PostgreSQL entrambi self-hosted). In sintesi:
+nessuna decisione di hosting è vincolante a livello di codice — l'app è
+compatibile con qualsiasi hosting Node.js che supporti Next.js (Vercel,
+Netlify, VPS con Node 20+, container); non si assume Vercel come
+requisito, come da `AI/MASTER_SPEC.md` §24. La scelta operativa attuale
+dell'owner è un VPS Hostinger (vedi D30). `proxy.ts` richiede un runtime
+Node.js (supportato da Node.js server e container; non da static
+export). Non ci sono job in background: tutto avviene sincronamente
+dentro le richieste HTTP, coerentemente con `AI/MASTER_SPEC.md` §40.

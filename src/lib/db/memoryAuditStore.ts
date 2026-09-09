@@ -2,7 +2,7 @@ import type { AuditResult } from "@/features/audit/types";
 
 /**
  * Phase 1 mock persistence: an in-process Map, not durable across restarts
- * or multiple server instances. Replaced by the PostgreSQL/Supabase
+ * or multiple server instances. Replaced by the PostgreSQL
  * `audits` table in Phase 2 (see AI/MASTER_SPEC.md §10, §32).
  *
  * Stashed on `globalThis` rather than a plain module-level variable:

@@ -2,10 +2,13 @@
 -- See AI/MASTER_SPEC.md §10 and AI/ARCHITECTURE.md.
 --
 -- All tables are accessed exclusively through the server using the
--- Supabase service role key (see src/lib/db/supabaseClient.ts). Row Level
--- Security is enabled with no public policies, so anon/authenticated
--- clients get no access by default — this is deliberate defense in depth,
--- not an oversight (see AI/DECISIONS.md).
+-- app's own Postgres connection (see src/lib/db/pgClient.ts) — a
+-- self-managed database (e.g. on a Hostinger VPS) has no public HTTP API
+-- and no anon/authenticated client concept of its own, so access control
+-- is enforced by keeping the database unreachable from outside the
+-- server (no public port, credentials only in DATABASE_URL) rather than
+-- by row-level policies. Row Level Security is still enabled with no
+-- public policies as defense in depth (see AI/DECISIONS.md).
 
 create extension if not exists pgcrypto;
 

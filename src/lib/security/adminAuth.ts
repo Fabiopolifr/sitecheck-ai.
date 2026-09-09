@@ -13,7 +13,7 @@ function sign(payload: string): string {
 /**
  * Single-admin MVP session token: `<issuedAt>.<hmac>`, signed with
  * ADMIN_PASSWORD as the HMAC key. Not a general-purpose auth system —
- * see AI/DECISIONS.md for why this replaces Supabase Auth in Phase 2.
+ * see AI/DECISIONS.md for why this replaces a hosted auth provider.
  */
 export function createAdminSessionToken(): string {
   const issuedAt = Date.now().toString();

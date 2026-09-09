@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
+import { getPool, isDatabaseConfigured } from "./pgClient";
 import {
   saveSummary as saveMemorySummary,
   getSummary as getMemorySummary,
@@ -10,23 +10,28 @@ export async function saveSummary(
   auditId: string,
   summary: AuditSummary,
 ): Promise<void> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemorySummary(auditId, summary);
     return;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error } = await supabase.from("audit_summaries").insert({
-    id: randomUUID(),
-    audit_id: auditId,
-    provider: summary.provider,
-    model: summary.model,
-    summary: summary.summary,
-    priorities_json: summary.top_priorities,
-  });
+  const pool = getPool()!;
 
-  if (error) {
-    console.error("Failed to persist audit summary to Supabase:", error);
+  try {
+    await pool.query(
+      `insert into audit_summaries (id, audit_id, provider, model, summary, priorities_json)
+       values ($1,$2,$3,$4,$5,$6)`,
+      [
+        randomUUID(),
+        auditId,
+        summary.provider,
+        summary.model,
+        summary.summary,
+        JSON.stringify(summary.top_priorities),
+      ],
+    );
+  } catch (error) {
+    console.error("Failed to persist audit summary to Postgres:", error);
     saveMemorySummary(auditId, summary);
   }
 }
@@ -34,29 +39,29 @@ export async function saveSummary(
 export async function getSummary(
   auditId: string,
 ): Promise<AuditSummary | undefined> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return getMemorySummary(auditId);
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data, error } = await supabase
-    .from("audit_summaries")
-    .select("*")
-    .eq("audit_id", auditId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const pool = getPool()!;
 
-  if (error || !data) {
-    if (error)
-      console.error("Failed to read audit summary from Supabase:", error);
+  try {
+    const result = await pool.query(
+      `select * from audit_summaries where audit_id = $1
+       order by created_at desc limit 1`,
+      [auditId],
+    );
+    const row = result.rows[0];
+    if (!row) return undefined;
+
+    return {
+      summary: row.summary,
+      top_priorities: row.priorities_json,
+      provider: row.provider,
+      model: row.model,
+    };
+  } catch (error) {
+    console.error("Failed to read audit summary from Postgres:", error);
     return undefined;
   }
-
-  return {
-    summary: data.summary,
-    top_priorities: data.priorities_json,
-    provider: data.provider,
-    model: data.model,
-  };
 }

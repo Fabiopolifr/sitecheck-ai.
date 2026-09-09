@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
+import { getPool, isDatabaseConfigured } from "./pgClient";
 import {
   saveContentPost as saveMemoryPost,
   listContentPosts as listMemoryPosts,
@@ -21,26 +21,32 @@ export async function saveContentInsight(
     createdAt: new Date().toISOString(),
   };
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemoryInsight(record);
     return record;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error } = await supabase.from("content_insights").insert({
-    id: record.id,
-    industry: record.industry,
-    metric: record.metric,
-    sample_size: record.sampleSize,
-    value: record.value,
-    period_start: record.periodStart,
-    period_end: record.periodEnd,
-    source_query_hash: record.sourceQueryHash,
-    created_at: record.createdAt,
-  });
+  const pool = getPool()!;
 
-  if (error) {
-    console.error("Failed to persist content insight to Supabase:", error);
+  try {
+    await pool.query(
+      `insert into content_insights
+        (id, industry, metric, sample_size, value, period_start, period_end, source_query_hash, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        record.id,
+        record.industry,
+        record.metric,
+        record.sampleSize,
+        record.value,
+        record.periodStart,
+        record.periodEnd,
+        record.sourceQueryHash,
+        record.createdAt,
+      ],
+    );
+  } catch (error) {
+    console.error("Failed to persist content insight to Postgres:", error);
     saveMemoryInsight(record);
   }
 
@@ -59,29 +65,36 @@ export async function saveContentPost(
     ...post,
   };
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     saveMemoryPost(record);
     return record;
   }
 
-  const supabase = getSupabaseClient()!;
-  const { error } = await supabase.from("content_posts").insert({
-    id: record.id,
-    type: record.type,
-    source_type: record.sourceType,
-    source_reference: record.sourceReference,
-    headline: record.headline,
-    body: record.body,
-    cta: record.cta,
-    image_url: record.imageUrl,
-    status: record.status,
-    scheduled_at: record.scheduledAt,
-    published_at: record.publishedAt,
-    created_at: record.createdAt,
-  });
+  const pool = getPool()!;
 
-  if (error) {
-    console.error("Failed to persist content post to Supabase:", error);
+  try {
+    await pool.query(
+      `insert into content_posts
+        (id, type, source_type, source_reference, headline, body, cta, image_url,
+         status, scheduled_at, published_at, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        record.id,
+        record.type,
+        record.sourceType,
+        record.sourceReference,
+        record.headline,
+        record.body,
+        record.cta,
+        record.imageUrl,
+        record.status,
+        record.scheduledAt,
+        record.publishedAt,
+        record.createdAt,
+      ],
+    );
+  } catch (error) {
+    console.error("Failed to persist content post to Postgres:", error);
     saveMemoryPost(record);
   }
 
@@ -89,34 +102,34 @@ export async function saveContentPost(
 }
 
 export async function listContentPosts(limit = 100): Promise<ContentPost[]> {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return listMemoryPosts().slice(0, limit);
   }
 
-  const supabase = getSupabaseClient()!;
-  const { data, error } = await supabase
-    .from("content_posts")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const pool = getPool()!;
 
-  if (error || !data) {
-    console.error("Failed to list content posts from Supabase:", error);
+  try {
+    const result = await pool.query(
+      "select * from content_posts order by created_at desc limit $1",
+      [limit],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      sourceType: row.source_type,
+      sourceReference: row.source_reference,
+      headline: row.headline,
+      body: row.body,
+      cta: row.cta,
+      imageUrl: row.image_url,
+      status: row.status,
+      scheduledAt: row.scheduled_at,
+      publishedAt: row.published_at,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error("Failed to list content posts from Postgres:", error);
     return [];
   }
-
-  return data.map((row) => ({
-    id: row.id,
-    type: row.type,
-    sourceType: row.source_type,
-    sourceReference: row.source_reference,
-    headline: row.headline,
-    body: row.body,
-    cta: row.cta,
-    imageUrl: row.image_url,
-    status: row.status,
-    scheduledAt: row.scheduled_at,
-    publishedAt: row.published_at,
-    createdAt: row.created_at,
-  }));
 }
