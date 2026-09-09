@@ -1,9 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAudit } from "@/lib/db/memoryAuditStore";
+import { getAudit } from "@/lib/db/auditsRepository";
 import { CategoryDetails } from "@/components/CategoryDetails";
+import { EmailCaptureForm } from "@/components/EmailCaptureForm";
+import { AffiliateCta } from "@/components/AffiliateCta";
 import { BAND_LABELS } from "@/features/audit/labels";
-import type { Check } from "@/features/audit/types";
+import type { AuditResult, Check } from "@/features/audit/types";
+
+function cookieConsentNeedsAttention(audit: AuditResult): boolean {
+  const cookieConsent = audit.categories.find(
+    (c) => c.category === "cookie_consent",
+  );
+  return (
+    cookieConsent?.checks.some(
+      (check) => check.status === "fail" || check.status === "warning",
+    ) ?? false
+  );
+}
 
 function topPriorities(checks: Check[], limit: number): Check[] {
   return checks
@@ -22,7 +35,7 @@ export default async function AuditResultsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const audit = getAudit(id);
+  const audit = await getAudit(id);
 
   if (!audit) {
     notFound();
@@ -96,6 +109,16 @@ export default async function AuditResultsPage({
             .map((category) => (
               <CategoryDetails key={category.category} category={category} />
             ))}
+        </div>
+
+        {cookieConsentNeedsAttention(audit) && (
+          <div className="mt-10">
+            <AffiliateCta auditId={audit.id} partner="cookieyes" />
+          </div>
+        )}
+
+        <div className="mt-10">
+          <EmailCaptureForm auditId={audit.id} />
         </div>
 
         <p className="mt-10 text-xs leading-5 text-zinc-400">

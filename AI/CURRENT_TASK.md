@@ -7,62 +7,63 @@ deve lavorare. Viene aggiornato ad ogni nuovo ciclo di sviluppo.
 
 ## Stato
 
-Phase 1 — Audit Engine: **completata**, in attesa di feedback prima di
-Phase 2 (Persistence + Leads + Affiliate).
+Phase 2 — Persistence + Leads + Affiliate: **completata**, in attesa di
+feedback prima di Phase 3 (AI Summaries).
 
 ## Task completato
 
-Phase 1 — Audit Engine (`AI/MASTER_SPEC.md` §32):
+Phase 2 (`AI/MASTER_SPEC.md` §32):
 
-- [x] form URL collegato a un endpoint reale (`POST /api/audit`)
-- [x] normalizzazione URL (`src/features/audit/url.ts`)
-- [x] protezione SSRF con validazione IP post-DNS e pinning del socket
-      (`src/lib/security/ssrf.ts`, `src/lib/security/safeFetch.ts`)
-- [x] fetcher sicuro: timeout, limite dimensione risposta, limite redirect,
-      gestione manuale dei redirect con nuova validazione SSRF ad ogni hop
-- [x] rate limiting per IP sull'endpoint di audit
-      (`src/lib/security/rateLimit.ts`)
-- [x] detector modulari: technical, SEO, privacy, cookie/consent, tracking,
-      performance (con fallback se `PAGESPEED_API_KEY` non è configurata),
-      forms (informativo)
-- [x] calcolo score per categoria e Site Score totale
-      (`src/features/audit/scoring.ts`)
-- [x] UI risultati con progressive disclosure, 3 priorità principali,
-      wording italiano non-legale conforme a `AI/MASTER_SPEC.md` §5
-- [x] persistenza mock in-memory (`src/lib/db/memoryAuditStore.ts`)
-- [x] test unitari: normalizzazione URL, SSRF guard, scoring, un detector
-      (37 test totali)
-- [x] `npm run lint`, `npm run format:check`, `npm run test`,
+- [x] integrazione Supabase (`@supabase/supabase-js`, client service-role
+      server-only) con fallback automatico su store in-memory quando non
+      configurata
+- [x] schema SQL (`supabase/migrations/0001_init.sql`): `audits`,
+      `audit_checks`, `leads`, `affiliate_clicks`, RLS abilitata senza
+      policy pubbliche
+- [x] persistenza reale degli audit (`src/lib/db/auditsRepository.ts`)
+- [x] cattura lead con consenso marketing separato dal servizio
+      (`POST /api/leads`, `src/components/EmailCaptureForm.tsx`)
+- [x] adapter email provider-agnostico (`src/lib/email/`): Resend +
+      mock/dev di default
+- [x] redirect affiliato generico e tracciato (`GET /go/[partner]`,
+      partner `cookieyes` configurato via `COOKIEYES_AFFILIATE_URL`)
+- [x] CTA affiliato sui risultati quando Cookie & Consent ha criticità
+- [x] dashboard admin (`/admin`) con metriche aggregate: audit totali/
+      oggi/7gg, score medio, lead, tasso cattura email, click affiliati,
+      CTR, problemi e tecnologie più rilevate, audit recenti
+- [x] autenticazione admin: password singola + cookie firmato HMAC,
+      gate applicato da `src/proxy.ts` (convenzione Next.js 16, sostituisce
+      `middleware.ts` deprecato)
+- [x] `npm run lint`, `npm run format:check`, `npm run test` (37/37),
       `npm run build` verdi
-- [x] verifica end-to-end reale: audit contro `https://pypi.org` (sito
-      pubblico reale, raggiungibile dall'ambiente sandbox di sviluppo) →
-      Site Score 72/100, banda "Buono", breakdown per categoria coerente
-- [x] verifica SSRF: `127.0.0.1`, `localhost`, `169.254.169.254`
-      (metadata endpoint cloud), `192.168.1.1` bloccati correttamente,
-      producono un audit con stato "failed" invece di eseguire la richiesta
+- [x] verifica end-to-end reale (store in-memory, senza Supabase):
+      audit → lead capture → email mock → redirect affiliato con UTM →
+      dashboard admin con numeri corretti
+- [x] bug di sicurezza trovato e corretto durante il testing: il matcher
+      del proxy non proteggeva `/admin` nudo (solo `/admin/*`) — vedi
+      `AI/DECISIONS.md` D17
 - [x] `AI/ARCHITECTURE.md` e `AI/DECISIONS.md` aggiornati
 
-## Nota tecnica
+## Nota
 
-Il test end-to-end contro un vero sito pubblico non è stato eseguito
-contro un dominio arbitrario a scelta: l'ambiente di sviluppo di questa
-sessione instrada l'uscita HTTPS attraverso un proxy con allowlist
-ristretta (registry pacchetti, GitHub, API Anthropic). `pypi.org` è
-servito HTML reale ed è nell'allowlist, quindi è stato usato come sito
-pubblico reale per la verifica end-to-end. Questo è un vincolo
-dell'ambiente di sviluppo, non del codice: su un hosting di produzione
-normale (senza egress proxy ristretto) l'audit funziona contro qualunque
-URL pubblico passi la validazione SSRF.
+Non essendo disponibile un progetto Supabase live in questa sessione di
+sviluppo, l'integrazione Supabase non è stata verificata contro un
+database reale — solo tramite lettura del codice e coerenza dello schema
+SQL con le query. Prima del primo deploy con Supabase attivo, eseguire la
+migration (`supabase/migrations/0001_init.sql`) sul progetto reale e
+verificare un ciclo audit→lead→affiliato→dashboard end-to-end.
 
 ## Prossimo task consigliato
 
-Phase 2 — Persistence + Leads + Affiliate (`AI/MASTER_SPEC.md` §32):
+Phase 3 — AI Summaries (`AI/MASTER_SPEC.md` §32, §9):
 
-- integrazione PostgreSQL/Supabase, sostituendo `memoryAuditStore`
-- persistenza reale della tabella `audits` (e `audit_checks`)
-- cattura lead (email) con consenso marketing separato dal servizio
-- adapter email transazionale (Resend o equivalente, con modalità mock)
-- redirect affiliato tracciato (`/go/[partner]`, inizialmente CookieYes)
-- dashboard admin di base (audit totali, lead, click affiliati)
+- interfaccia `AIProvider` provider-agnostica
+- configurazione modello economico via env (`AI_PROVIDER`, `AI_API_KEY`,
+  `AI_MODEL`)
+- prompt strutturato: input JSON (site_score, industry, checks), output
+  JSON validato (summary + top_priorities)
+- fallback deterministico a template se la chiamata AI fallisce o non è
+  configurata (l'audit non deve mai dipendere dalla disponibilità AI)
+- persistenza in `audit_summaries`
 
-In attesa di feedback esplicito prima di iniziare Phase 2.
+In attesa di feedback esplicito prima di iniziare Phase 3.

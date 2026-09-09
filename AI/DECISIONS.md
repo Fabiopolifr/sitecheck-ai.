@@ -7,7 +7,7 @@ prese durante lo sviluppo di SiteCheck AI, con relative motivazioni.
 
 ## Stato
 
-Phase 1 — Audit Engine completata.
+Phase 2 — Persistence + Leads + Affiliate completata.
 
 ## Decisioni
 
@@ -166,3 +166,84 @@ breakdown per categoria coerente. Su un hosting di produzione normale
 (senza egress proxy ristretto) l'audit funziona contro qualunque URL
 pubblico che superi la validazione SSRF — nessuna modifica al codice è
 necessaria.
+
+### D13 — Persistenza Supabase con fallback automatico in-memory
+
+**Decisione:** i repository in `src/lib/db/` (`auditsRepository.ts`,
+`leadsRepository.ts`, `affiliateRepository.ts`) usano Supabase quando
+`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` sono configurate, altrimenti
+ricadono trasparentemente sugli store in-memory di Phase 1/2. Se una
+scrittura su Supabase fallisce a runtime, l'errore viene loggato e il
+dato viene comunque salvato in-memory invece di far fallire la richiesta.
+
+**Motivazione:** coerenza con la decisione D4 (Phase 0) — build, test e
+`next dev` devono funzionare senza credenziali reali. Non avendo accesso
+a un progetto Supabase live in questa sessione di sviluppo, il fallback è
+anche l'unico modo per verificare end-to-end il comportamento
+dell'applicazione in questa fase (vedi anche D12). L'owner può attivare
+Supabase in qualunque momento impostando le due env var, senza modifiche
+al codice.
+
+### D14 — `audit_checks` come tabella separata, non solo JSONB su `audits`
+
+**Decisione:** oltre alla tabella `audits` (colonne strutturate + non
+JSONB per i campi tabellari), ogni check viene salvato come riga propria
+in `audit_checks`.
+
+**Motivazione:** `AI/MASTER_SPEC.md` §10 la definisce esplicitamente come
+tabella a sé. È anche l'unico modo pratico di fare aggregazioni SQL dirette
+per l'admin dashboard ("problemi più rilevati", "tecnologie più rilevate")
+e, in futuro, per il content engine (§15–§19) che deve poter interrogare
+"quanti siti hanno il check X in stato fail" senza deserializzare JSON.
+
+### D15 — Admin: gate a password singola con cookie firmato, non Supabase Auth
+
+**Decisione:** l'accesso a `/admin` è protetto da una password singola
+(env var `ADMIN_PASSWORD`) con sessione in un cookie HttpOnly firmato via
+HMAC-SHA256 (`src/lib/security/adminAuth.ts`), non da Supabase Auth.
+
+**Motivazione:** `AI/MASTER_SPEC.md` §13 dice "Use Supabase Auth **if**
+Supabase is adopted" — una raccomandazione condizionale, non un obbligo.
+Supabase Auth richiederebbe un progetto Supabase live per essere
+verificato (flusso email/password o magic link), non disponibile in
+questa sessione di sviluppo. Un gate a password singola con cookie
+firmato è: sufficiente per un solo utente admin (esplicitamente permesso
+dalla spec), a costo zero, verificabile interamente senza servizi esterni,
+e sostituibile con Supabase Auth in una fase futura senza cambiare la
+superficie della dashboard. La firma usa confronto a tempo costante
+(`timingSafeEqual`) per evitare timing attack sulla verifica.
+
+### D16 — Convenzione `proxy.ts`, non `middleware.ts`
+
+**Decisione:** la protezione di `/admin` è implementata in `src/proxy.ts`
+(funzione `proxy`), non `src/middleware.ts`.
+
+**Motivazione:** Next.js 16 deprecare la convenzione `middleware` in
+favore di `proxy` (rinominata per chiarire che non è middleware in stile
+Express — vedi la nota nella doc ufficiale bundled in
+`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`).
+Usare la convenzione deprecata avrebbe lasciato un warning di build
+permanente in un progetto che punta a restare production-ready. Nota
+tecnica: Proxy esegue di default su runtime Node.js e non accetta più
+l'opzione `config.runtime` (genera errore se impostata), a differenza del
+vecchio middleware che richiedeva `runtime: "nodejs"` esplicito per
+uscire dall'Edge runtime.
+
+### D17 — Bug trovato in Phase 2: il matcher del proxy non copriva `/admin` nudo
+
+**Cosa è successo:** il matcher iniziale `["/admin/((?!login).*)"]`
+richiede uno slash e almeno un carattere dopo `/admin`, quindi non
+matcha mai il percorso `/admin` da solo — solo `/admin/qualcosa`. La
+dashboard vive esattamente su `/admin`, quindi il proxy non veniva mai
+invocato per essa: la pagina era raggiungibile senza autenticazione.
+
+**Come è stato trovato:** verifica end-to-end manuale (`curl` senza
+cookie di sessione contro `/admin`), non dalla sola lettura del codice —
+promemoria del perché il testing end-to-end reale, non solo lint/build/
+test automatici, resta necessario prima di dichiarare una feature di
+sicurezza completa.
+
+**Fix:** matcher esteso a `["/admin", "/admin/((?!login).*)"]`. Verificato
+di nuovo end-to-end: richiesta non autenticata → redirect 307 a
+`/admin/login`; richiesta con cookie di sessione valido → 200 con i dati
+della dashboard.

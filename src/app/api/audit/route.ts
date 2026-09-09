@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runAudit } from "@/features/audit/runAudit";
-import { saveAudit } from "@/lib/db/memoryAuditStore";
+import { saveAudit } from "@/lib/db/auditsRepository";
 import { isRateLimited } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  saveAudit(result.audit);
+  await saveAudit(result.audit);
 
   return NextResponse.json({ id: result.audit.id }, { status: 201 });
 }

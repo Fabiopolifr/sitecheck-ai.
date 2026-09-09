@@ -26,3 +26,9 @@ export function saveAudit(result: AuditResult): void {
 export function getAudit(id: string): AuditResult | undefined {
   return store.get(id);
 }
+
+export function listAudits(): AuditResult[] {
+  return [...store.values()].sort((a, b) =>
+    b.completedAt.localeCompare(a.completedAt),
+  );
+}

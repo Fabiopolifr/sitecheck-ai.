@@ -7,7 +7,7 @@ progetto da Claude Code, task dopo task.
 
 ## Stato
 
-Phase 1 — Audit Engine completata.
+Phase 2 — Persistence + Leads + Affiliate completata.
 
 ## Log
 
@@ -61,3 +61,37 @@ Phase 1 — Audit Engine completata.
   - verifica end-to-end reale contro `https://pypi.org`: Site Score
     72/100, banda "Buono"; verifica SSRF contro `127.0.0.1`, `localhost`,
     `169.254.169.254`, `192.168.1.1` — tutti bloccati correttamente
+
+- 2026-09-09 — Phase 2 — Persistence + Leads + Affiliate:
+  - integrazione Supabase (`@supabase/supabase-js`) con fallback
+    automatico su store in-memory quando non configurata
+  - schema SQL iniziale (`supabase/migrations/0001_init.sql`): `audits`,
+    `audit_checks`, `leads`, `affiliate_clicks`, RLS senza policy
+    pubbliche (accesso solo via service role key server-side)
+  - repository per audit, lead, click affiliati
+    (`src/lib/db/{audits,leads,affiliate}Repository.ts`)
+  - cattura lead (`POST /api/leads`) con consenso marketing separato dal
+    servizio, form sui risultati (`EmailCaptureForm.tsx`)
+  - adapter email provider-agnostico (`src/lib/email/`): Resend + mock/dev
+  - redirect affiliato generico e tracciato (`GET /go/[partner]`,
+    configurazione partner in `src/features/affiliate/partners.ts`), CTA
+    condizionale sui risultati quando Cookie & Consent ha criticità
+  - dashboard admin (`/admin`) con metriche aggregate
+    (`src/features/admin/metrics.ts`)
+  - autenticazione admin: password singola + cookie firmato HMAC-SHA256,
+    gate applicato da `src/proxy.ts`
+  - migrazione da `middleware.ts` (deprecato in Next.js 16) a `proxy.ts`
+  - bug di sicurezza trovato durante il testing end-to-end e corretto: il
+    matcher del proxy non copriva `/admin` nudo, solo `/admin/*` — la
+    dashboard era raggiungibile senza autenticazione (vedi
+    `AI/DECISIONS.md` D17)
+  - bug trovato e corretto: `/admin` veniva prerenderizzata staticamente
+    al build, mostrando dati non aggiornati — aggiunto
+    `export const dynamic = "force-dynamic"`
+  - aggiornati `AI/ARCHITECTURE.md`, `AI/DECISIONS.md`, `AI/CURRENT_TASK.md`
+  - verificati: `npm run lint`, `npm run format:check`, `npm run test`
+    (37/37), `npm run build` (tutti verdi)
+  - verifica end-to-end reale (store in-memory): audit → lead capture →
+    email mock loggata correttamente → redirect affiliato con UTM
+    corretti → dashboard admin con numeri esatti (1 audit, 100% cattura
+    email, 100% CTR affiliati, problemi rilevati elencati)
