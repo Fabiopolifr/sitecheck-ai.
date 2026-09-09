@@ -5,6 +5,7 @@ import { getSummary } from "@/lib/db/summariesRepository";
 import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 import { AffiliateCta } from "@/components/AffiliateCta";
+import { TrackPageView } from "@/components/TrackPageView";
 import { BAND_LABELS } from "@/features/audit/labels";
 import type { AuditResult, Check } from "@/features/audit/types";
 
@@ -75,6 +76,7 @@ export default async function AuditResultsPage({
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
+      <TrackPageView eventName="results_viewed" auditId={audit.id} />
       <div className="mx-auto w-full max-w-3xl">
         <p className="text-sm text-zinc-500">{audit.finalUrl}</p>
         <p className="text-xs text-zinc-400">

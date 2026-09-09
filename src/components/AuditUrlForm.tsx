@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSessionId, getUtmParams } from "@/lib/analytics/client";
 
 export function AuditUrlForm() {
   const router = useRouter();
@@ -17,10 +18,17 @@ export function AuditUrlForm() {
     setError(null);
 
     try {
+      const utm = getUtmParams();
       const response = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          url,
+          sessionId: getSessionId(),
+          utmSource: utm.utmSource,
+          utmMedium: utm.utmMedium,
+          utmCampaign: utm.utmCampaign,
+        }),
       });
 
       const data = (await response.json()) as { id?: string; error?: string };

@@ -7,57 +7,66 @@ deve lavorare. Viene aggiornato ad ogni nuovo ciclo di sviluppo.
 
 ## Stato
 
-Phase 3 — AI Summaries: **completata**, in attesa di feedback prima di
-Phase 4 (Launch Analytics).
+Phase 4 — Launch Analytics: **completata**. Le fasi 0–4 di
+`AI/MASTER_SPEC.md` §32 (l'intero MVP v1, §4) sono ora implementate.
 
 ## Task completato
 
-Phase 3 (`AI/MASTER_SPEC.md` §32, §9):
+Phase 4 (`AI/MASTER_SPEC.md` §32, §14, §33):
 
-- [x] interfaccia `AIProvider` provider-agnostica (`src/lib/ai/types.ts`)
-- [x] implementazione Anthropic (`@anthropic-ai/sdk`, modello di default
-      `claude-haiku-4-5`, configurabile via `AI_PROVIDER`/`AI_API_KEY`/`AI_MODEL`)
-- [x] prompt strutturato: input JSON minimale (site_score, industry,
-      checks[{id, category, status}]), output JSON validato
-- [x] validazione Zod dell'output AI, sia nel provider sia — di nuovo,
-      centralmente — nell'orchestratore (bug trovato e corretto, vedi
-      `AI/DECISIONS.md` D19)
-- [x] fallback deterministico basato su template, sempre disponibile;
-      l'audit non dipende mai dalla disponibilità AI
-- [x] persistenza `audit_summaries` (Supabase + fallback in-memory)
-- [x] UI risultati aggiornata: mostra il summary AI/deterministico e le
-      priorità con titolo + motivazione
-- [x] `npm run lint`, `npm run format:check`, `npm run test` (44/44),
+- [x] vocabolario eventi fisso e validato (`landing_view`,
+      `audit_started`, `audit_completed`, `audit_failed`,
+      `results_viewed`, `email_submitted`, `affiliate_clicked`)
+- [x] tabella `analytics_events` (Supabase + fallback in-memory)
+- [x] tracker client (`localStorage`, fire-and-forget, non blocca mai il
+      flusso utente) per gli eventi di pagina
+- [x] eventi lifecycle audit/lead/affiliato loggati server-side (più
+      affidabile del client-side — vedi `AI/DECISIONS.md` D22)
+- [x] cattura UTM (`utm_source`/`utm_medium`/`utm_campaign`) dalla
+      landing fino alla persistenza su `audits`
+- [x] metriche di funnel in admin dashboard: landing→audit avviato,
+      audit avviato→completato, risultati→email, risultati→click
+      affiliato
+- [x] `DEPLOYMENT.md`: guida al deploy in produzione (env var, migration,
+      checklist pre-lancio, limiti noti)
+- [x] 50 test totali (6 nuovi per schema eventi + calcolo funnel)
+- [x] `npm run lint`, `npm run format:check`, `npm run test` (50/50),
       `npm run build` verdi
-- [x] verifica end-to-end reale (senza AI configurata, percorso
-      deterministico): audit contro `pypi.org` → summary e priorità
-      corrette e visibili in UI
+- [x] verifica end-to-end con browser reale (Playwright/Chromium,
+      installato temporaneamente solo per il QA, non nel progetto):
+      submit form → risultati → cattura email → click affiliato → login
+      admin → dashboard con conteggi e tassi di conversione corretti
 - [x] `AI/ARCHITECTURE.md` e `AI/DECISIONS.md` aggiornati
+
+## Stato del prodotto
+
+Con Phase 4 completa, l'MVP v1 descritto in `AI/MASTER_SPEC.md` §4 è
+implementato nella sua interezza: landing, audit engine, Site Score,
+risultati, cattura email, persistenza, redirect affiliato + CTA
+CookieYes, dashboard admin, eventi analytics di base, e readiness al
+deploy in produzione (documentata, non ancora eseguita).
 
 ## Nota
 
-Il percorso con provider Anthropic reale non è stato verificato con una
-chiamata effettiva all'API (nessuna `ANTHROPIC_API_KEY` di prodotto
-disponibile in questa sessione di sviluppo) — solo per lettura del codice
-e test unitari con provider mockato. Prima del primo deploy con
-`AI_PROVIDER=anthropic` attivo, eseguire almeno un audit reale con la
-chiave impostata e verificare che `audit_summaries.provider` /
-`audit_summaries.model` riportino `"anthropic"` / il modello configurato,
-e che il testo generato sia sensato.
+Come per le fasi precedenti, due percorsi restano verificati solo per
+lettura del codice/test unitari, non con servizi esterni reali in questo
+sandbox di sviluppo: Supabase (nessun progetto live disponibile) e il
+provider Anthropic reale (nessuna `ANTHROPIC_API_KEY` di prodotto).
+`DEPLOYMENT.md` include i passi di smoke test da eseguire al primo deploy
+reale per colmare questi due gap.
 
 ## Prossimo task consigliato
 
-Phase 4 — Launch Analytics (`AI/MASTER_SPEC.md` §32, §14):
+L'MVP v1 è completo. Le fasi successive di `AI/MASTER_SPEC.md` sono
+esplicitamente posteriori al lancio:
 
-- tracking eventi interni: `landing_view`, `audit_started`,
-  `audit_completed`, `audit_failed`, `results_viewed`, `email_submitted`,
-  `affiliate_clicked`
-- tabella `analytics_events` (Supabase + fallback in-memory, stesso
-  pattern delle altre repository)
-- cattura UTM (`utm_source`, `utm_medium`, `utm_campaign`) — i campi
-  esistono già su `audits` ma non sono ancora popolati
-- metriche di conversione in admin dashboard: landing→audit start,
-  audit start→completion, results→email capture, results→affiliate click
-- documentazione di deployment in produzione
+- **Phase 5 — Content Engine**: da iniziare solo dopo aver raccolto dati
+  reali da audit (§15: soglia minima campione n=30 prima di pubblicare
+  statistiche derivate).
+- **Phase 6 — SEO Engine** e **Phase 7 — Ads Engine**: esplicitamente
+  "deliver later" in `AI/MASTER_SPEC.md` §32.
 
-In attesa di feedback esplicito prima di iniziare Phase 4.
+Il passo più naturale ora non è una fase nuova, ma: (1) deploy reale
+seguendo `DEPLOYMENT.md`, (2) raccolta di traffico/dati reali, (3)
+verifica dei due gap noti (Supabase live, provider Anthropic reale) in
+produzione. In attesa di indicazioni sull'owner su come procedere.

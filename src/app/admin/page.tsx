@@ -1,7 +1,11 @@
 import { listAudits } from "@/lib/db/auditsRepository";
 import { listLeads } from "@/lib/db/leadsRepository";
 import { listAffiliateClicks } from "@/lib/db/affiliateRepository";
-import { computeAdminMetrics } from "@/features/admin/metrics";
+import { listEvents } from "@/lib/db/eventsRepository";
+import {
+  computeAdminMetrics,
+  computeFunnelMetrics,
+} from "@/features/admin/metrics";
 import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 import { BAND_LABELS } from "@/features/audit/labels";
@@ -16,13 +20,15 @@ function formatPercent(value: number | null): string {
 }
 
 export default async function AdminDashboardPage() {
-  const [audits, leads, affiliateClicks] = await Promise.all([
+  const [audits, leads, affiliateClicks, events] = await Promise.all([
     listAudits(),
     listLeads(),
     listAffiliateClicks(),
+    listEvents(),
   ]);
 
   const metrics = computeAdminMetrics(audits, leads, affiliateClicks);
+  const funnel = computeFunnelMetrics(events);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-12">
@@ -58,6 +64,36 @@ export default async function AdminDashboardPage() {
             label="CTR affiliati"
             value={formatPercent(metrics.affiliateCtr)}
           />
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Funnel di conversione
+          </h2>
+          <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatTile
+              label="Landing → Audit avviato"
+              value={formatPercent(funnel.landingToAuditStartRate)}
+            />
+            <StatTile
+              label="Audit avviato → completato"
+              value={formatPercent(funnel.auditStartToCompletionRate)}
+            />
+            <StatTile
+              label="Risultati → Email"
+              value={formatPercent(funnel.resultsToEmailCaptureRate)}
+            />
+            <StatTile
+              label="Risultati → Click affiliato"
+              value={formatPercent(funnel.resultsToAffiliateClickRate)}
+            />
+          </div>
+          <p className="mt-3 text-xs text-zinc-400">
+            {funnel.landingViews} visite landing · {funnel.auditsStarted} audit
+            avviati · {funnel.auditsCompleted} completati ·{" "}
+            {funnel.resultsViewed} risultati visti · {funnel.emailsSubmitted}{" "}
+            email · {funnel.affiliateClicked} click affiliati
+          </p>
         </div>
 
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">

@@ -7,7 +7,7 @@ prese durante lo sviluppo di SiteCheck AI, con relative motivazioni.
 
 ## Stato
 
-Phase 3 — AI Summaries completata.
+Phase 4 — Launch Analytics completata.
 
 ## Decisioni
 
@@ -322,3 +322,73 @@ primo deploy con `AI_PROVIDER=anthropic` attivo, va eseguito almeno un
 audit reale con la chiave impostata e verificato che il summary generato
 sia sensato e che `provider`/`model` in `audit_summaries` riportino
 `"anthropic"` / `"claude-haiku-4-5"` (o il modello configurato).
+
+### D22 — Eventi lifecycle audit/lead/affiliato loggati server-side, non client-side
+
+**Decisione:** `audit_started`, `audit_completed`, `audit_failed`,
+`email_submitted` e `affiliate_clicked` vengono emessi dentro i rispettivi
+route handler (`POST /api/audit`, `POST /api/leads`, `GET /go/[partner]`),
+non da codice client eseguito nel browser. Solo `landing_view` e
+`results_viewed` — puri eventi di visualizzazione pagina, senza un hook
+server naturale — sono client-side (`TrackPageView.tsx`).
+
+**Motivazione:** un evento client-side dipende dal fatto che il browser
+esegua quel JavaScript fino in fondo (l'utente potrebbe chiudere la tab,
+perdere la connessione, avere JS bloccato); un evento loggato dentro il
+route handler che già gestisce quell'azione è garantito nella stessa
+misura in cui l'azione stessa riesce. In più, solo il server conosce con
+certezza l'esito reale (`audit_completed` vs `audit_failed` dipende dal
+risultato di `runAudit`, non da cosa il client *pensa* sia successo).
+
+### D23 — `affiliate_clicked` è un evento distinto da `affiliate_clicks`, non una duplicazione
+
+**Decisione:** il click su un link affiliato produce sia una riga in
+`affiliate_clicks` (tabella di dominio, Phase 2, con `destination`,
+`detected_issue`, UTM propri) sia un evento `affiliate_clicked` in
+`analytics_events` (Phase 4, con solo `session_id` e `audit_id`).
+
+**Motivazione:** `AI/MASTER_SPEC.md` elenca esplicitamente entrambi come
+requisiti separati — `affiliate_clicks` in §10 (Phase 2, per il tracking
+di dettaglio del singolo click e le metriche CTR già in dashboard),
+`affiliate_clicked` in §14 (Phase 4, per il funnel per-sessione che
+attraversa `landing_view → ... → affiliate_clicked`). Le due tabelle
+rispondono a domande diverse: "quanti click e verso quale destinazione"
+vs. "quale frazione delle sessioni che hanno visto i risultati arriva a
+cliccare". Unificarle avrebbe richiesto forzare lo schema di una delle
+due a fare il lavoro dell'altra.
+
+### D24 — Session id anonimo in `localStorage`, mai un cookie, mai collegato a un utente
+
+**Decisione:** l'id di sessione usato per il funnel
+(`src/lib/analytics/client.ts`, `getSessionId()`) è generato con
+`crypto.randomUUID()` e salvato in `localStorage`, non in un cookie, e
+non viene mai associato a un'identità reale a meno che il visitatore
+invii esplicitamente la propria email tramite il form di cattura lead
+(a quel punto `leads.email` e l'evento `email_submitted` condividono lo
+stesso `audit_id`, ma non lo stesso record — restano tabelle separate).
+
+**Motivazione:** è il minimo necessario per collegare gli eventi di una
+stessa visita (`AI/MASTER_SPEC.md` §28, "store the minimum necessary
+data"), senza introdurre un sistema di tracciamento cross-site o
+persistente oltre il browser del visitatore. Un cookie avrebbe richiesto
+di considerare banner di consenso propri per un prodotto che, per primo,
+audita la gestione dei cookie altrui — un rischio reputazionale/legale
+evitabile scegliendo `localStorage` (che non viaggia nelle richieste HTTP
+e non richiede consenso per finalità strettamente tecniche di sessione).
+
+### D25 — Verifica end-to-end con Playwright non aggiunto come dipendenza del progetto
+
+**Decisione:** il funnel completo (landing → audit → risultati → email →
+click affiliato → dashboard admin) è stato verificato con un browser
+Chromium reale via Playwright, installato temporaneamente in una
+directory scratch di questa sessione ed eliminato al termine — non
+aggiunto a `package.json`.
+
+**Motivazione:** questo repository non ha ancora una suite di test e2e
+(solo unit test Vitest); aggiungere Playwright come dipendenza permanente
+solo per una verifica manuale una tantum sarebbe stato prematuro
+("evitare astrazioni premature"). Se in futuro si vuole test e2e
+ricorrenti nella CI, va valutato come task a sé, non come effetto
+collaterale di questa verifica. Il browser Chromium usato era già
+pre-installato nell'ambiente di sviluppo di questa sessione (non
+scaricato per l'occasione).

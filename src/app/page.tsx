@@ -1,6 +1,7 @@
 import { AuditUrlForm } from "@/components/AuditUrlForm";
 import { CheckCard } from "@/components/CheckCard";
 import { StepItem } from "@/components/StepItem";
+import { TrackPageView } from "@/components/TrackPageView";
 
 const checks = [
   {
@@ -39,6 +40,7 @@ const steps = [
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col">
+      <TrackPageView eventName="landing_view" />
       <section className="flex flex-col items-center px-6 py-24 text-center sm:py-32">
         <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
           Quanto è sano il sito della tua agenzia?

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getSessionId } from "@/lib/analytics/client";
 
 type EmailCaptureFormProps = {
   auditId: string;
@@ -26,6 +27,7 @@ export function EmailCaptureForm({ auditId }: EmailCaptureFormProps) {
           auditId,
           email,
           consentMarketing: consent,
+          sessionId: getSessionId(),
         }),
       });
 

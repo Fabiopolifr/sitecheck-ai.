@@ -7,7 +7,8 @@ progetto da Claude Code, task dopo task.
 
 ## Stato
 
-Phase 3 — AI Summaries completata.
+Phase 4 — Launch Analytics completata. MVP v1 (`AI/MASTER_SPEC.md` §4)
+implementato nella sua interezza.
 
 ## Log
 
@@ -124,3 +125,34 @@ Phase 3 — AI Summaries completata.
     priorità mostrate correttamente in UI; percorso con provider
     Anthropic reale verificato solo per lettura del codice e test con
     mock (vedi `AI/DECISIONS.md` D21)
+
+- 2026-09-09 — Phase 4 — Launch Analytics:
+  - vocabolario eventi fisso e validato (`src/lib/analytics/events.ts`):
+    `landing_view`, `audit_started`, `audit_completed`, `audit_failed`,
+    `results_viewed`, `email_submitted`, `affiliate_clicked`
+  - tabella `analytics_events`
+    (`supabase/migrations/0003_analytics_events.sql` + fallback in-memory)
+  - tracker client fire-and-forget (`src/lib/analytics/client.ts`,
+    `localStorage`-based, non blocca mai il flusso utente)
+  - eventi lifecycle (audit start/completed/failed, email inviata, click
+    affiliato) loggati server-side dentro i route handler esistenti,
+    non client-side — più affidabile (`AI/DECISIONS.md` D22)
+  - cattura UTM da query string fino alla persistenza su `audits`
+    (colonne esistenti dalla Phase 2, mai popolate finora)
+  - metriche di funnel in admin dashboard (`computeFunnelMetrics`):
+    landing→audit avviato, audit avviato→completato, risultati→email,
+    risultati→click affiliato — deliberatamente separate dalle metriche
+    Phase 2 esistenti, non una modifica alla loro semantica
+  - `DEPLOYMENT.md`: guida al deploy in produzione
+  - 50 test totali (6 nuovi: schema eventi + calcolo funnel)
+  - aggiornati `AI/ARCHITECTURE.md`, `AI/DECISIONS.md`, `AI/CURRENT_TASK.md`
+  - verificati: `npm run lint`, `npm run format:check`, `npm run test`
+    (50/50), `npm run build` (tutti verdi)
+  - verifica end-to-end con browser reale (Playwright/Chromium,
+    installato temporaneamente solo per il QA di questa sessione, non
+    aggiunto al progetto — `AI/DECISIONS.md` D25): flusso completo
+    landing (con UTM) → submit audit → risultati → cattura email → click
+    affiliato → login admin → dashboard con conteggi e tassi di
+    conversione corretti (es. 2 audit, 100% completamento, 50% cattura
+    email, 25% click affiliato su risultati visti)
+  - con questa fase, l'MVP v1 di `AI/MASTER_SPEC.md` §4 è completo

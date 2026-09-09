@@ -1,6 +1,7 @@
 import type { AuditResult } from "@/features/audit/types";
 import type { Lead } from "@/lib/db/leadsRepository";
 import type { AffiliateClick } from "@/lib/db/affiliateRepository";
+import type { AnalyticsEvent } from "@/lib/db/eventsRepository";
 
 export type TopIssue = { checkId: string; count: number };
 export type TopTechnology = { trackerId: string; count: number };
@@ -96,5 +97,53 @@ export function computeAdminMetrics(
     topIssues,
     topTechnologies,
     recentAudits,
+  };
+}
+
+export type FunnelMetrics = {
+  landingViews: number;
+  auditsStarted: number;
+  auditsCompleted: number;
+  resultsViewed: number;
+  emailsSubmitted: number;
+  affiliateClicked: number;
+  landingToAuditStartRate: number | null;
+  auditStartToCompletionRate: number | null;
+  resultsToEmailCaptureRate: number | null;
+  resultsToAffiliateClickRate: number | null;
+};
+
+function rate(numerator: number, denominator: number): number | null {
+  return denominator === 0 ? null : numerator / denominator;
+}
+
+/**
+ * Conversion funnel per AI/MASTER_SPEC.md §33, computed from
+ * `analytics_events` rather than the domain tables (audits/leads/
+ * affiliate_clicks) — those measure completed actions, this measures the
+ * funnel a visitor actually moved through.
+ */
+export function computeFunnelMetrics(events: AnalyticsEvent[]): FunnelMetrics {
+  const count = (name: AnalyticsEvent["eventName"]) =>
+    events.filter((e) => e.eventName === name).length;
+
+  const landingViews = count("landing_view");
+  const auditsStarted = count("audit_started");
+  const auditsCompleted = count("audit_completed");
+  const resultsViewed = count("results_viewed");
+  const emailsSubmitted = count("email_submitted");
+  const affiliateClickedCount = count("affiliate_clicked");
+
+  return {
+    landingViews,
+    auditsStarted,
+    auditsCompleted,
+    resultsViewed,
+    emailsSubmitted,
+    affiliateClicked: affiliateClickedCount,
+    landingToAuditStartRate: rate(auditsStarted, landingViews),
+    auditStartToCompletionRate: rate(auditsCompleted, auditsStarted),
+    resultsToEmailCaptureRate: rate(emailsSubmitted, resultsViewed),
+    resultsToAffiliateClickRate: rate(affiliateClickedCount, resultsViewed),
   };
 }

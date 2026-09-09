@@ -8,7 +8,7 @@ esterne. Va aggiornato ogni volta che l'architettura cambia.
 
 ## Stato
 
-Phase 3 — AI Summaries completata.
+Phase 4 — Launch Analytics completata.
 
 ## Stack tecnologico
 
@@ -43,30 +43,31 @@ Phase 3 — AI Summaries completata.
 ├── src/
 │   ├── app/                # Next.js App Router
 │   │   ├── admin/          # Dashboard admin + login (Phase 2)
-│   │   ├── api/            # Route handler: audit, leads, admin login/logout
+│   │   ├── api/            # Route handler: audit, leads, events, admin login/logout
 │   │   ├── audit/[id]/     # Pagina risultati
 │   │   └── go/[partner]/   # Redirect affiliato generico (Phase 2)
 │   ├── components/         # Componenti UI generici e riutilizzabili
 │   ├── features/           # Logica di business divisa per dominio
 │   │   ├── audit/          # Motore di audit (Phase 1)
 │   │   ├── affiliate/      # Config partner affiliati (Phase 2)
-│   │   ├── admin/          # Aggregazione metriche dashboard (Phase 2)
-│   │   ├── analytics/      # Eventi interni (Phase 4)
+│   │   ├── admin/          # Aggregazione metriche + funnel dashboard (Phase 2, 4)
 │   │   └── content/        # Motore contenuti automatico (Phase 5)
 │   ├── lib/
 │   │   ├── config/         # Configurazione centralizzata (env.ts)
 │   │   ├── db/             # Repository Supabase + fallback in-memory
 │   │   ├── email/          # Adapter email provider-agnostico (Phase 2)
 │   │   ├── ai/             # Layer AI provider-agnostico (Phase 3)
+│   │   ├── analytics/      # Vocabolario eventi + tracker client (Phase 4)
 │   │   └── security/       # SSRF guard, rate limiting, admin auth
 │   └── proxy.ts            # Guard di autenticazione per /admin (Phase 2)
 ├── supabase/
-│   └── migrations/         # Schema SQL (Phase 2, Phase 3)
+│   └── migrations/         # Schema SQL (Phase 2, 3, 4)
 ├── scripts/                # Script operativi futuri
 ├── tests/                  # Test Vitest
 ├── public/                 # Asset statici
 ├── .env.example
 ├── CLAUDE.md
+├── DEPLOYMENT.md           # Guida al deploy in produzione (Phase 4)
 └── README.md
 ```
 
@@ -257,10 +258,69 @@ quando disponibili, altrimenti ricadono sulla lista calcolata
 localmente dai check `fail`/`warning` (compatibilità con eventuali audit
 salvati prima di questa fase).
 
+## Analytics interne e funnel (Phase 4)
+
+`src/lib/analytics/`:
+
+- `events.ts` — vocabolario fisso di eventi (`EVENT_NAMES`, coerente con
+  `AI/MASTER_SPEC.md` §14): `landing_view`, `audit_started`,
+  `audit_completed`, `audit_failed`, `results_viewed`, `email_submitted`,
+  `affiliate_clicked`. Nomi arbitrari vengono rifiutati dallo schema Zod
+  (`trackEventSchema`), così la tabella resta interrogabile.
+- `client.ts` — helper solo client (`"use client"`): `getSessionId()`
+  genera/legge un id anonimo per-browser da `localStorage` (fallback a un
+  id per-chiamata se non disponibile, non solleva mai eccezioni);
+  `trackEvent()` è fire-and-forget verso `POST /api/events` (`keepalive:
+  true`, non blocca né rompe mai il flusso utente); `getUtmParams()`
+  legge `utm_source`/`utm_medium`/`utm_campaign` dalla query string.
+
+Persistenza: `analytics_events`
+(`supabase/migrations/0003_analytics_events.sql` + fallback in-memory,
+`src/lib/db/eventsRepository.ts`, stesso pattern delle altre repository).
+
+Dove ogni evento viene emesso:
+
+- `landing_view` / `results_viewed` — client-side al mount
+  (`src/components/TrackPageView.tsx`), sulla landing e sulla pagina
+  risultati (solo per audit completati).
+- `audit_started` / `audit_completed` / `audit_failed` — **server-side**
+  dentro `POST /api/audit`, non client-side: più affidabile (non dipende
+  dal JS del client che sopravvive fino al completamento della fetch), e
+  l'esito (completato/fallito) è noto solo al server. Richiede che il
+  client invii `sessionId` nel body.
+- `email_submitted` — server-side dentro `POST /api/leads`, stesso motivo.
+- `affiliate_clicked` — server-side dentro `GET /go/[partner]`, leggendo
+  `session` dalla query string del link (`AffiliateCta.tsx` lo aggiunge
+  dopo il mount per evitare un mismatch di idratazione fra markup
+  server e client, dato che il session id esiste solo in `localStorage`).
+
+UTM capture: `AuditUrlForm.tsx` legge `getUtmParams()` al submit e li
+invia a `POST /api/audit`, che li scrive sulle colonne
+`utm_source`/`utm_medium`/`utm_campaign` di `audits` (esistevano dallo
+schema di Phase 2 ma non erano mai state popolate).
+
+Funnel in admin (`computeFunnelMetrics`, `src/features/admin/metrics.ts`):
+calcola i tassi richiesti da `AI/MASTER_SPEC.md` §33 (landing→audit
+avviato, audit avviato→completato, risultati→email, risultati→click
+affiliato) contando gli eventi per nome — deliberatamente separato dalle
+metriche di Phase 2 (`computeAdminMetrics`, che usa audit/lead/click come
+denominatore totale): misurano cose diverse (funnel di un visitatore vs.
+conteggi assoluti sulle tabelle di dominio) e cambiare la semantica di
+una metrica già in produzione sarebbe stata una breaking change silenziosa.
+
+Verificato end-to-end con un browser reale (Playwright, Chromium
+pre-installato in questo sandbox, non aggiunto come dipendenza del
+progetto): submit form → pagina risultati → cattura email → click
+affiliato → login admin → dashboard con conteggi e tassi corretti.
+
 ## Deployment
 
-Nessuna decisione di hosting è ancora vincolante: l'app è compatibile con
-qualsiasi hosting Node.js che supporti Next.js (Vercel, Netlify, VPS con
-Node 20+, container). Non si assume Vercel come requisito, come da
+Vedi `DEPLOYMENT.md` per la guida completa (variabili d'ambiente,
+migration da eseguire, checklist pre-lancio). In sintesi: nessuna
+decisione di hosting è vincolante — l'app è compatibile con qualsiasi
+hosting Node.js che supporti Next.js (Vercel, Netlify, VPS con Node 20+,
+container); non si assume Vercel come requisito, come da
 `AI/MASTER_SPEC.md` §24. `proxy.ts` richiede un runtime Node.js
-(supportato da Node.js server e container; non da static export).
+(supportato da Node.js server e container; non da static export). Non ci
+sono job in background: tutto avviene sincronamente dentro le richieste
+HTTP, coerentemente con `AI/MASTER_SPEC.md` §40.

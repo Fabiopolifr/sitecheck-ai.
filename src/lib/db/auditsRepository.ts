@@ -49,9 +49,9 @@ function toAuditRow(audit: AuditResult): AuditRow {
     started_at: audit.startedAt,
     completed_at: audit.completedAt,
     source: null,
-    utm_source: null,
-    utm_medium: null,
-    utm_campaign: null,
+    utm_source: audit.utmSource ?? null,
+    utm_medium: audit.utmMedium ?? null,
+    utm_campaign: audit.utmCampaign ?? null,
   };
 }
 
@@ -100,6 +100,9 @@ function fromRows(row: AuditRow, checkRows: AuditCheckRow[]): AuditResult {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     categories,
+    utmSource: row.utm_source,
+    utmMedium: row.utm_medium,
+    utmCampaign: row.utm_campaign,
   };
 }
 

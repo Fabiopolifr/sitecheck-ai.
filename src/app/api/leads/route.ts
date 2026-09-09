@@ -3,6 +3,7 @@ import { z } from "zod";
 import { saveLead } from "@/lib/db/leadsRepository";
 import { getAudit } from "@/lib/db/auditsRepository";
 import { getEmailProvider } from "@/lib/email";
+import { saveEvent } from "@/lib/db/eventsRepository";
 import { isRateLimited } from "@/lib/security/rateLimit";
 import { env } from "@/lib/config/env";
 
@@ -13,6 +14,7 @@ const requestSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1).max(200).optional(),
   consentMarketing: z.boolean().default(false),
+  sessionId: z.string().min(1).max(100).optional(),
 });
 
 function getClientKey(request: Request): string {
@@ -43,7 +45,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { auditId, email, firstName, consentMarketing } = parsed.data;
+  const { auditId, email, firstName, consentMarketing, sessionId } =
+    parsed.data;
   const audit = await getAudit(auditId);
 
   const lead = await saveLead({
@@ -52,6 +55,10 @@ export async function POST(request: Request) {
     firstName,
     consentMarketing,
   });
+
+  if (sessionId) {
+    await saveEvent({ sessionId, auditId, eventName: "email_submitted" });
+  }
 
   const emailProvider = getEmailProvider();
   const scoreLine =

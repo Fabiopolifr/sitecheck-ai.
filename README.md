@@ -4,8 +4,9 @@ Analisi tecnica automatizzata del sito web per agenzie immobiliari (e, in
 futuro, altri settori): cookie/consent, privacy, tracking, SEO e
 performance, con un Site Score sintetico.
 
-Vedi `AI/MASTER_SPEC.md` per la specifica completa di prodotto e
-`AI/ARCHITECTURE.md` per l'architettura tecnica aggiornata.
+Vedi `AI/MASTER_SPEC.md` per la specifica completa di prodotto,
+`AI/ARCHITECTURE.md` per l'architettura tecnica aggiornata e
+`DEPLOYMENT.md` per la guida al deploy in produzione.
 
 ## Stack
 

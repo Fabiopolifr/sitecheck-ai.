@@ -44,6 +44,9 @@ export type AuditResult = {
   band: ScoreBand | null;
   categories: CategoryResult[];
   failureReason?: string;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
 };
 
 /** Context handed to every detector. Detectors must be pure and synchronous. */
