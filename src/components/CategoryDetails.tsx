@@ -19,12 +19,20 @@ export function CategoryDetails({ category }: CategoryDetailsProps) {
   return (
     <details className="group rounded-2xl border border-zinc-200 open:pb-2">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5">
-        <div>
+        <div className="flex-1">
           <h3 className="text-base font-semibold text-zinc-900">
             {CATEGORY_LABELS[category.category]}
           </h3>
           {category.score !== null && (
-            <p className="mt-1 text-sm text-zinc-500">{category.score}/100</p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-100">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{ width: `${category.score}%` }}
+                />
+              </div>
+              <p className="text-sm text-zinc-500">{category.score}/100</p>
+            </div>
           )}
         </div>
         <span className="text-sm text-zinc-400 transition-transform group-open:rotate-180">

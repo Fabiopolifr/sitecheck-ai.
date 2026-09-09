@@ -6,8 +6,15 @@ import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 import { AffiliateCta } from "@/components/AffiliateCta";
 import { TrackPageView } from "@/components/TrackPageView";
-import { BAND_LABELS } from "@/features/audit/labels";
+import { ScoreGauge } from "@/components/ScoreGauge";
+import { BAND_LABELS, BAND_COLORS } from "@/features/audit/labels";
 import type { AuditResult, Check } from "@/features/audit/types";
+
+const SEVERITY_DOT: Record<"high" | "medium" | "low", string> = {
+  high: "bg-danger",
+  medium: "bg-warning",
+  low: "bg-zinc-300",
+};
 
 function cookieConsentNeedsAttention(audit: AuditResult): boolean {
   const cookieConsent = audit.categories.find(
@@ -69,30 +76,37 @@ export default async function AuditResultsPage({
   const fallbackPriorities = topPriorities(allChecks, 3).map((check) => ({
     title: check.id,
     reason: check.evidence ?? "elemento da verificare",
+    severity: (check.status === "fail" ? "high" : "medium") as
+      | "high"
+      | "medium",
   }));
   const priorities = summary?.top_priorities.length
     ? summary.top_priorities
     : fallbackPriorities;
+  const bandColors = audit.band ? BAND_COLORS[audit.band] : null;
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
       <TrackPageView eventName="results_viewed" auditId={audit.id} />
       <div className="mx-auto w-full max-w-3xl">
-        <p className="text-sm text-zinc-500">{audit.finalUrl}</p>
-        <p className="text-xs text-zinc-400">
-          {new Date(audit.completedAt).toLocaleString("it-IT")}
-        </p>
-
-        <div className="mt-6 flex items-end gap-4">
-          <span className="text-6xl font-semibold tracking-tight text-zinc-900">
-            {audit.siteScore ?? "—"}
-          </span>
-          <span className="pb-2 text-lg text-zinc-500">/ 100</span>
-          {audit.band && (
-            <span className="mb-2 ml-auto rounded-full bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent">
-              {BAND_LABELS[audit.band]}
-            </span>
-          )}
+        <div className="flex flex-col items-start gap-6 rounded-2xl border border-zinc-200 bg-zinc-50/50 p-6 sm:flex-row sm:items-center">
+          <ScoreGauge score={audit.siteScore} band={audit.band} />
+          <div>
+            <p className="text-sm font-medium text-zinc-700">
+              {audit.finalUrl}
+            </p>
+            <p className="text-xs text-zinc-400">
+              Analizzato il{" "}
+              {new Date(audit.completedAt).toLocaleString("it-IT")}
+            </p>
+            {audit.band && (
+              <span
+                className={`mt-3 inline-flex rounded-full px-4 py-1.5 text-sm font-medium ${bandColors?.bg} ${bandColors?.text}`}
+              >
+                {BAND_LABELS[audit.band]}
+              </span>
+            )}
+          </div>
         </div>
 
         {summary && (
@@ -110,10 +124,18 @@ export default async function AuditResultsPage({
               {priorities.map((priority) => (
                 <li
                   key={priority.title}
-                  className="rounded-xl border border-zinc-200 px-5 py-4 text-sm text-zinc-800"
+                  className="flex items-start gap-3 rounded-xl border border-zinc-200 px-5 py-4 text-sm text-zinc-800"
                 >
-                  <p className="font-medium text-zinc-900">{priority.title}</p>
-                  <p className="mt-1 text-zinc-600">{priority.reason}</p>
+                  <span
+                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOT[priority.severity ?? "medium"]}`}
+                    aria-hidden
+                  />
+                  <div>
+                    <p className="font-medium text-zinc-900">
+                      {priority.title}
+                    </p>
+                    <p className="mt-1 text-zinc-600">{priority.reason}</p>
+                  </div>
                 </li>
               ))}
             </ul>

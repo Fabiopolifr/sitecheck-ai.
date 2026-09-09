@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { getSessionId } from "@/lib/analytics/client";
+import { ShieldIcon } from "@/components/icons";
 
 type AffiliateCtaProps = {
   auditId: string;
@@ -28,8 +29,11 @@ export function AffiliateCta({ auditId, partner }: AffiliateCtaProps) {
   }, [partner, auditId]);
 
   return (
-    <div className="rounded-2xl border border-accent/20 bg-accent/5 px-6 py-6">
-      <h3 className="text-base font-semibold text-zinc-900">
+    <div className="rounded-2xl border border-accent/20 bg-accent-soft px-6 py-6">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-accent shadow-sm">
+        <ShieldIcon className="h-5 w-5" />
+      </span>
+      <h3 className="mt-4 text-base font-semibold text-zinc-900">
         Approfondisci la gestione cookie e consenso
       </h3>
       <p className="mt-2 text-sm text-zinc-600">
@@ -39,7 +43,7 @@ export function AffiliateCta({ auditId, partner }: AffiliateCtaProps) {
       <a
         ref={linkRef}
         href={buildHref(partner, auditId)}
-        className="mt-4 inline-flex rounded-full bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+        className="mt-4 inline-flex rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-sm shadow-accent/30 transition-colors hover:bg-accent/90"
       >
         Scopri come risolvere
       </a>

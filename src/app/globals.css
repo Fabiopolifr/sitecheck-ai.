@@ -2,14 +2,22 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-  --accent: #2563eb;
+  --foreground: #18181b;
+  --accent: #4338ca;
+  --accent-soft: #eef2ff;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -17,4 +25,19 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+.bg-grid {
+  background-image: radial-gradient(circle, #e4e4e7 1px, transparent 1px);
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 70% 60% at 50% 0%,
+    black 40%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 70% 60% at 50% 0%,
+    black 40%,
+    transparent 100%
+  );
 }

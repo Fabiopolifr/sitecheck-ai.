@@ -62,13 +62,35 @@ export function AuditUrlForm() {
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           disabled={loading}
-          className="w-full rounded-full border border-zinc-300 px-5 py-3 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
+          className="w-full rounded-full border border-zinc-300 bg-white px-5 py-3 text-base text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={loading}
-          className="shrink-0 rounded-full bg-accent px-6 py-3 text-base font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-base font-medium text-white shadow-sm shadow-accent/30 transition-colors hover:bg-accent/90 disabled:opacity-60"
         >
+          {loading && (
+            <svg
+              className="h-4 w-4 animate-spin text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-90"
+                fill="currentColor"
+                d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4Z"
+              />
+            </svg>
+          )}
           {loading ? "Analisi in corso…" : "Analizza gratis"}
         </button>
       </form>
