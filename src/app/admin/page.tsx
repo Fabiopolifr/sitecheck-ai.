@@ -6,6 +6,7 @@ import { listEvents } from "@/lib/db/eventsRepository";
 import {
   computeAdminMetrics,
   computeFunnelMetrics,
+  computeAbTestMetrics,
 } from "@/features/admin/metrics";
 import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
@@ -30,6 +31,7 @@ export default async function AdminDashboardPage() {
 
   const metrics = computeAdminMetrics(audits, leads, affiliateClicks);
   const funnel = computeFunnelMetrics(events);
+  const abTest = computeAbTestMetrics(events);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-12">
@@ -102,6 +104,43 @@ export default async function AdminDashboardPage() {
             avviati · {funnel.auditsCompleted} completati ·{" "}
             {funnel.resultsViewed} risultati visti · {funnel.emailsSubmitted}{" "}
             email · {funnel.affiliateClicked} click affiliati
+          </p>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Test A/B — sblocco email sul dettaglio analisi
+          </h2>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-200 px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Gated (email per sbloccare)
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-zinc-900">
+                {formatPercent(abTest.gated.conversionRate)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {abTest.gated.emailsSubmitted} email /{" "}
+                {abTest.gated.resultsViewed} visite
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Open (dettaglio sempre visibile)
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-zinc-900">
+                {formatPercent(abTest.open.conversionRate)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {abTest.open.emailsSubmitted} email /{" "}
+                {abTest.open.resultsViewed} visite
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-zinc-400">
+            Split 50/50 deterministico per audit (AI/DECISIONS.md D31). Con
+            campioni piccoli le percentuali sono poco affidabili: aspetta almeno
+            qualche decina di visite per variante prima di trarre conclusioni.
           </p>
         </div>
 

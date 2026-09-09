@@ -117,6 +117,44 @@ function rate(numerator: number, denominator: number): number | null {
   return denominator === 0 ? null : numerator / denominator;
 }
 
+export type AbVariantMetrics = {
+  variant: "gated" | "open";
+  resultsViewed: number;
+  emailsSubmitted: number;
+  conversionRate: number | null;
+};
+
+export type AbTestMetrics = {
+  gated: AbVariantMetrics;
+  open: AbVariantMetrics;
+};
+
+/**
+ * Conversion of the "gated deep-dive" experiment (AI/DECISIONS.md D31),
+ * split by the abVariant metadata on results_viewed and the source
+ * metadata on email_submitted — both already recorded, no extra schema.
+ */
+export function computeAbTestMetrics(events: AnalyticsEvent[]): AbTestMetrics {
+  function build(variant: "gated" | "open"): AbVariantMetrics {
+    const resultsViewed = events.filter(
+      (e) =>
+        e.eventName === "results_viewed" && e.metadata?.abVariant === variant,
+    ).length;
+    const source = variant === "gated" ? "gate" : "default";
+    const emailsSubmitted = events.filter(
+      (e) => e.eventName === "email_submitted" && e.metadata?.source === source,
+    ).length;
+    return {
+      variant,
+      resultsViewed,
+      emailsSubmitted,
+      conversionRate: rate(emailsSubmitted, resultsViewed),
+    };
+  }
+
+  return { gated: build("gated"), open: build("open") };
+}
+
 /**
  * Conversion funnel per AI/MASTER_SPEC.md §33, computed from
  * `analytics_events` rather than the domain tables (audits/leads/

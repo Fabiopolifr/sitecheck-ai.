@@ -79,8 +79,7 @@ export default async function AuditResultsPage({
     title: check.id,
     reason: check.evidence ?? "elemento da verificare",
     severity: (check.status === "fail" ? "high" : "medium") as
-      | "high"
-      | "medium",
+      "high" | "medium",
   }));
   const priorities = summary?.top_priorities.length
     ? summary.top_priorities

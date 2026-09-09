@@ -43,8 +43,8 @@ export function GatedContent({ auditId, gated, children }: GatedContentProps) {
         </svg>
       </span>
       <p className="mx-auto mt-3 max-w-sm text-center text-sm text-zinc-600">
-        Il dettaglio completo categoria per categoria (Tecnico, SEO,
-        Privacy, Tracking, Performance) si sblocca con la tua email.
+        Il dettaglio completo categoria per categoria (Tecnico, SEO, Privacy,
+        Tracking, Performance) si sblocca con la tua email.
       </p>
       <div className="mt-4">
         <EmailCaptureForm

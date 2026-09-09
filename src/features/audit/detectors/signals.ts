@@ -33,7 +33,10 @@ const TRACKER_PATTERNS: Record<TrackerId, RegExp[]> = {
     /_linkedin_partner_id/i,
   ],
   pinterest_tag: [/s\.pinimg\.com\/ct\/core\.js/i, /pintrk\(\s*['"]load['"]/i],
-  twitter_pixel: [/static\.ads-twitter\.com\/uwt\.js/i, /twq\(\s*['"]config['"]/i],
+  twitter_pixel: [
+    /static\.ads-twitter\.com\/uwt\.js/i,
+    /twq\(\s*['"]config['"]/i,
+  ],
   hotjar: [/static\.hotjar\.com/i, /\bhjid\s*[:=]/i],
   microsoft_clarity: [/clarity\.ms\/tag/i, /clarity\(\s*['"]set['"]/i],
 };

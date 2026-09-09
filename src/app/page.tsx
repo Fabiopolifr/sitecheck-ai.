@@ -115,8 +115,8 @@ export default function Home() {
             Cosa controlliamo
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-sm text-zinc-500">
-            Cinque aree chiave che incidono su fiducia, conformità e
-            conversioni del sito.
+            Cinque aree chiave che incidono su fiducia, conformità e conversioni
+            del sito.
           </p>
           <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
             {checks.map((check) => (

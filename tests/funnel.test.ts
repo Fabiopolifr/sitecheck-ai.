@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeFunnelMetrics } from "@/features/admin/metrics";
+import {
+  computeFunnelMetrics,
+  computeAbTestMetrics,
+} from "@/features/admin/metrics";
 import { trackEventSchema } from "@/lib/analytics/events";
 import type { AnalyticsEvent } from "@/lib/db/eventsRepository";
 
@@ -80,5 +83,33 @@ describe("computeFunnelMetrics", () => {
     const funnel = computeFunnelMetrics([event("audit_completed")]);
     expect(funnel.landingToAuditStartRate).toBeNull();
     expect(funnel.auditStartToCompletionRate).toBeNull();
+  });
+});
+
+describe("computeAbTestMetrics", () => {
+  it("splits results_viewed and email_submitted by variant/source", () => {
+    const events: AnalyticsEvent[] = [
+      event("results_viewed", { metadata: { abVariant: "gated" } }),
+      event("results_viewed", { metadata: { abVariant: "gated" } }),
+      event("results_viewed", { metadata: { abVariant: "open" } }),
+      event("email_submitted", { metadata: { source: "gate" } }),
+      event("email_submitted", { metadata: { source: "default" } }),
+    ];
+
+    const abTest = computeAbTestMetrics(events);
+
+    expect(abTest.gated.resultsViewed).toBe(2);
+    expect(abTest.gated.emailsSubmitted).toBe(1);
+    expect(abTest.gated.conversionRate).toBeCloseTo(0.5);
+
+    expect(abTest.open.resultsViewed).toBe(1);
+    expect(abTest.open.emailsSubmitted).toBe(1);
+    expect(abTest.open.conversionRate).toBeCloseTo(1);
+  });
+
+  it("never divides by zero", () => {
+    const abTest = computeAbTestMetrics([]);
+    expect(abTest.gated.conversionRate).toBeNull();
+    expect(abTest.open.conversionRate).toBeNull();
   });
 });
