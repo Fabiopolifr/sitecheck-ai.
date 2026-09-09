@@ -43,8 +43,9 @@ locale rapido.
 Per abilitare la persistenza reale:
 
 1. Crea un progetto su [supabase.com](https://supabase.com) (free tier).
-2. Nel SQL Editor del progetto, esegui il contenuto di
-   `supabase/migrations/0001_init.sql`.
+2. Nel SQL Editor del progetto, esegui in ordine tutti i file in
+   `supabase/migrations/` (`0001_init.sql`, `0002_audit_summaries.sql`,
+   `0003_analytics_events.sql`, `0004_content_engine.sql`).
 3. In `.env.local`, imposta:
    ```env
    SUPABASE_URL=https://<project-ref>.supabase.co
@@ -84,6 +85,26 @@ AI_MODEL=claude-haiku-4-5
 economico disponibile). Se la chiamata AI fallisce per qualunque motivo
 (rete, output non valido), l'app ricade automaticamente sul template
 deterministico — non è mai un punto di rottura.
+
+## Content engine (Phase 5)
+
+`POST /api/content/generate` genera un post per la coda contenuti
+(`/admin/content`), protetto da header `x-content-secret`:
+
+```env
+CONTENT_GENERATION_SECRET=<genera con `openssl rand -hex 32`>
+```
+
+Senza dati reali sufficienti (minimo 30 audit completati), il contenuto
+generato è evergreen (scritto a mano, nessuna statistica). Superata la
+soglia, i post di tipo "Data Insight" usano dati reali aggregati.
+L'endpoint è pensato per essere chiamato da uno scheduler esterno
+(Vercel Cron o simile) — l'app non esegue job in background da sola.
+
+La pubblicazione effettiva sui social avviene tramite il flusso Claude
+Code + Metricool già in uso dall'owner, non da questa app: la coda
+contenuti prepara i testi, la pubblicazione resta un passo manuale/
+agent-assistito (vedi `AI/DECISIONS.md` D27).
 
 ## Comandi
 

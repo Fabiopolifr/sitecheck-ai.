@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listAudits } from "@/lib/db/auditsRepository";
 import { listLeads } from "@/lib/db/leadsRepository";
 import { listAffiliateClicks } from "@/lib/db/affiliateRepository";
@@ -37,7 +38,15 @@ export default async function AdminDashboardPage() {
           <h1 className="text-xl font-semibold text-zinc-900">
             SiteCheck AI — Admin
           </h1>
-          <AdminLogoutButton />
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin/content"
+              className="text-sm text-zinc-500 hover:text-zinc-800"
+            >
+              Coda contenuti
+            </Link>
+            <AdminLogoutButton />
+          </div>
         </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -60,6 +60,9 @@ PAGESPEED_API_KEY=
 
 # Affiliato CookieYes
 COOKIEYES_AFFILIATE_URL=
+
+# Content engine — scheduler esterno per POST /api/content/generate
+CONTENT_GENERATION_SECRET=
 ```
 
 **Mai** committare valori reali di queste variabili nel repository.
@@ -73,11 +76,12 @@ root.
    devono passare senza errori.
 2. **Migration Supabase**: esegui in ordine tutti i file in
    `supabase/migrations/` (attualmente `0001_init.sql`, poi
-   `0002_audit_summaries.sql`, poi `0003_analytics_events.sql`) sul
-   progetto Supabase di produzione, tramite il SQL Editor o la CLI
-   Supabase. Verifica che le tabelle abbiano RLS abilitata (le migration
-   la abilitano già) e nessuna policy pubblica: l'unico accesso previsto
-   è tramite la service role key lato server.
+   `0002_audit_summaries.sql`, poi `0003_analytics_events.sql`, poi
+   `0004_content_engine.sql`) sul progetto Supabase di produzione,
+   tramite il SQL Editor o la CLI Supabase. Verifica che le tabelle
+   abbiano RLS abilitata (le migration la abilitano già) e nessuna
+   policy pubblica: l'unico accesso previsto è tramite la service role
+   key lato server.
 3. **`ADMIN_PASSWORD`**: imposta una password robusta, diversa da quella
    usata in sviluppo. La dashboard `/admin` è protetta da un singolo
    cookie firmato HMAC — non è un sistema multi-utente (vedi
@@ -99,6 +103,13 @@ root.
    istanze/repliche, il limite è per-istanza, non globale — accettabile
    per il volume di traffico atteso in questa fase; da rivedere se il
    traffico cresce (es. store condiviso Redis).
+7. **Content engine (opzionale)**: se `CONTENT_GENERATION_SECRET` è
+   impostato, configura uno scheduler esterno (Vercel Cron o
+   equivalente) che chiami `POST /api/content/generate` con header
+   `x-content-secret`, secondo la cadenza desiderata (l'app stessa non
+   pianifica nulla). I post generati restano in coda su
+   `/admin/content`: la pubblicazione reale avviene tramite il flusso
+   Claude Code + Metricool esistente, non automaticamente.
 
 ## Cosa NON è ancora pronto per un lancio ad alto traffico
 

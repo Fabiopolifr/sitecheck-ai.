@@ -7,7 +7,7 @@ prese durante lo sviluppo di SiteCheck AI, con relative motivazioni.
 
 ## Stato
 
-Phase 4 — Launch Analytics completata.
+Phase 5 — Content Engine completata (infrastruttura).
 
 ## Decisioni
 
@@ -392,3 +392,79 @@ ricorrenti nella CI, va valutato come task a sé, non come effetto
 collaterale di questa verifica. Il browser Chromium usato era già
 pre-installato nell'ambiente di sviluppo di questa sessione (non
 scaricato per l'occasione).
+
+### D26 — Phase 5 avviata subito, non rimandata fino a n≥30 audit reali
+
+**Decisione:** l'infrastruttura del content engine (schema, calcolo
+insight, libreria evergreen, scheduler settimanale, endpoint di
+generazione, coda admin) è stata costruita in questa sessione, pur non
+esistendo ancora traffico di produzione reale.
+
+**Motivazione:** `AI/MASTER_SPEC.md` §15 dice "Start only after real
+audit data exists" riferendosi alla *pubblicazione di contenuti basati su
+dati*, non alla costruzione del codice che li produrrà. Lo stesso §15
+descrive esplicitamente cosa fare prima della soglia: "Before the
+threshold is reached, publish evergreen educational content" — cioè
+prevede un funzionamento valido anche a zero audit reali. Costruire ora
+l'infrastruttura (che si autolimita correttamente: `computeCookieConsentInsight`
+ritorna `null` sotto n=30, mai un numero inventato) significa che è già
+pronta a passare automaticamente alla modalità data-driven non appena il
+prodotto avrà traffico reale, senza richiedere una fase di sviluppo
+successiva dedicata.
+
+### D27 — Metricool riconosciuto come integrazione esistente, non ri-implementato via HTTP
+
+**Decisione:** `src/lib/social/` definisce l'interfaccia `SocialPublisher`
+richiesta da `AI/MASTER_SPEC.md` §17, ma l'unica implementazione fornita
+(`queuePublisher.ts`) non chiama nessuna API esterna — si limita a
+lasciare il post in stato `"queued"`.
+
+**Motivazione:** §17 istruisce esplicitamente: "Claude Code should first
+inspect what integrations or capabilities are actually available in the
+current environment before designing a new publisher. Prefer reusing an
+existing social publishing setup where practical." In questa sessione
+sono disponibili strumenti MCP Metricool (`createScheduledPost` e
+altri) e la skill `carosello-freesbe`, che confermano che il setup
+esistente dell'owner per la pubblicazione social è Metricool, guidato da
+Claude Code stesso in sessioni agent — non un'API che l'applicazione
+Next.js chiama server-side con una propria chiave. Scrivere un
+`MetricoolPublisher` che fa richieste HTTP dirette avrebbe richiesto
+indovinare la forma dell'API REST di Metricool (endpoint, autenticazione,
+struttura del payload) senza documentazione confermata in questa sessione
+— rischio concreto di un'integrazione silenziosamente sbagliata.
+L'interfaccia `SocialPublisher` resta comunque pronta per una futura
+implementazione reale (diretta o via Metricool) senza toccare la
+pipeline di generazione contenuti.
+
+### D28 — Rendering delle creative in PNG rimandato
+
+**Decisione:** i post generati non hanno un'immagine renderizzata
+(`content_posts.image_url` resta `null`); `AI/MASTER_SPEC.md` §18
+(template HTML/CSS → PNG 1080×1350 via Playwright/Puppeteer/Satori/Sharp)
+non è stato implementato in questa fase.
+
+**Motivazione:** nessuna delle librerie di rendering proposte da §18 è
+già una dipendenza del progetto, e aggiungerne una (tutte relativamente
+pesanti) sarebbe prematuro quando non esiste ancora contenuto reale da
+pubblicare che la richieda — lo stesso principio "evitare astrazioni
+premature" applicato in D25. Quando la pubblicazione reale via Metricool
+diventerà un passo effettivo (non solo la coda), la scelta della libreria
+di rendering andrà fatta con il vincolo concreto della piattaforma di
+hosting finale, non ipotizzata ora.
+
+### D29 — Verifica: soglia n≥30 confermata sia da test unitari sia da un ciclo end-to-end con 30 audit reali
+
+**Decisione:** oltre ai test unitari su `computeCookieConsentInsight`
+(sotto soglia → `null`, sopra soglia → valore corretto), è stato eseguito
+un ciclo end-to-end reale: generazione di contenuto forzato a
+`data_insight` con meno di 30 audit nello store (→ evergreen), poi invio
+di 30 audit reali contro `pypi.org` attraverso l'endpoint pubblico
+`/api/audit`, poi nuova generazione dello stesso tipo (→ basato su
+insight reale, verificato nella coda `/admin/content`).
+
+**Nota tecnica:** il primo tentativo di inviare 30 audit in parallelo è
+stato bloccato dal rate limiter per-IP di `/api/audit` (10 richieste/
+minuto, Phase 1) — comportamento corretto, non un bug — ed è stato
+necessario invece scaglionare le richieste rispettando il limite. Questo
+conferma indirettamente che il rate limiting introdotto in Phase 1
+funziona come progettato anche sotto carico concentrato.

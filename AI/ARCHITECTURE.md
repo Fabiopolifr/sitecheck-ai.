@@ -8,7 +8,8 @@ esterne. Va aggiornato ogni volta che l'architettura cambia.
 
 ## Stato
 
-Phase 4 — Launch Analytics completata.
+Phase 5 — Content Engine completata (infrastruttura; generazione ancora
+prevalentemente evergreen finché non esistono abbastanza audit reali).
 
 ## Stack tecnologico
 
@@ -42,8 +43,8 @@ Phase 4 — Launch Analytics completata.
 │   └── CHANGELOG_AI.md
 ├── src/
 │   ├── app/                # Next.js App Router
-│   │   ├── admin/          # Dashboard admin + login (Phase 2)
-│   │   ├── api/            # Route handler: audit, leads, events, admin login/logout
+│   │   ├── admin/          # Dashboard admin + login (Phase 2), coda contenuti (Phase 5)
+│   │   ├── api/            # Route handler: audit, leads, events, content, admin login/logout
 │   │   ├── audit/[id]/     # Pagina risultati
 │   │   └── go/[partner]/   # Redirect affiliato generico (Phase 2)
 │   ├── components/         # Componenti UI generici e riutilizzabili
@@ -51,17 +52,18 @@ Phase 4 — Launch Analytics completata.
 │   │   ├── audit/          # Motore di audit (Phase 1)
 │   │   ├── affiliate/      # Config partner affiliati (Phase 2)
 │   │   ├── admin/          # Aggregazione metriche + funnel dashboard (Phase 2, 4)
-│   │   └── content/        # Motore contenuti automatico (Phase 5)
+│   │   └── content/        # Motore contenuti: insight, evergreen, scheduler (Phase 5)
 │   ├── lib/
 │   │   ├── config/         # Configurazione centralizzata (env.ts)
 │   │   ├── db/             # Repository Supabase + fallback in-memory
 │   │   ├── email/          # Adapter email provider-agnostico (Phase 2)
 │   │   ├── ai/             # Layer AI provider-agnostico (Phase 3)
 │   │   ├── analytics/      # Vocabolario eventi + tracker client (Phase 4)
+│   │   ├── social/         # Adapter publisher provider-agnostico (Phase 5)
 │   │   └── security/       # SSRF guard, rate limiting, admin auth
 │   └── proxy.ts            # Guard di autenticazione per /admin (Phase 2)
 ├── supabase/
-│   └── migrations/         # Schema SQL (Phase 2, 3, 4)
+│   └── migrations/         # Schema SQL (Phase 2, 3, 4, 5)
 ├── scripts/                # Script operativi futuri
 ├── tests/                  # Test Vitest
 ├── public/                 # Asset statici
@@ -312,6 +314,66 @@ Verificato end-to-end con un browser reale (Playwright, Chromium
 pre-installato in questo sandbox, non aggiunto come dipendenza del
 progetto): submit form → pagina risultati → cattura email → click
 affiliato → login admin → dashboard con conteggi e tassi corretti.
+
+## Content Engine (Phase 5)
+
+`src/features/content/`:
+
+- `insights.ts` — `computeCookieConsentInsight(audits, industry)`: unica
+  metrica attualmente calcolata (percentuale di audit completati con
+  `cmp_detected` in `fail`/`warning`). Ritorna `null`, non un
+  placeholder inventato, se il campione è sotto `MINIMUM_SAMPLE_SIZE`
+  (30, `AI/MASTER_SPEC.md` §15). L'hash della query (`sourceQueryHash`)
+  rende ogni statistica pubblicata tracciabile a ritroso fino ai dati che
+  l'hanno generata (§44).
+- `evergreen.ts` — libreria statica di contenuti scritti a mano, uno o
+  più per ciascuno dei sei formati di §16, usata di default finché il
+  campione reale non è sufficiente. Nessun testo evergreen contiene una
+  statistica: verificato anche da un test dedicato
+  (`tests/content.test.ts`, "never fabricates a statistic").
+- `schedule.ts` — cadenza settimanale di esempio da §16 (lunedì Data
+  Insight, mercoledì Educational, venerdì Conversione).
+- `generate.ts` — `generateContent(type, audits, industry, seed)`: per
+  `data_insight` prova prima l'insight reale, altrimenti ricade su
+  evergreen; ogni altro tipo usa sempre evergreen per ora (nessun altro
+  formato ha ancora una variante data-driven implementata — scelta
+  esplicita, non un'omissione).
+
+Persistenza: `content_posts`, `content_insights`, `content_publications`
+(`supabase/migrations/0004_content_engine.sql` + fallback in-memory,
+`src/lib/db/contentRepository.ts`).
+
+Generazione: `POST /api/content/generate`
+(`src/app/api/content/generate/route.ts`), protetta da un header
+`x-content-secret` confrontato a tempo costante contro
+`CONTENT_GENERATION_SECRET`. Pensata per essere chiamata da uno
+scheduler esterno (Vercel Cron o equivalente) — l'app non esegue job in
+background in-process, coerentemente con la decisione di Phase 4/§40.
+Senza un `type` forzato nel body, usa la cadenza di `schedule.ts` per la
+data corrente; nei giorni non pianificati risponde `{skipped: true}`.
+
+Pubblicazione: `src/lib/social/` definisce l'interfaccia
+`SocialPublisher` (`publish`, `schedule?` opzionale) richiesta da
+`AI/MASTER_SPEC.md` §17. L'implementazione di default
+(`queuePublisher.ts`) non chiama nessuna API esterna: il setup di
+pubblicazione social che l'owner ha già è Metricool, guidato tramite i
+tool MCP Metricool di Claude Code (skill `carosello-freesbe`) — un
+flusso agent-driven, non un servizio a cui il codice server dell'app
+dovrebbe collegarsi con un'integrazione HTTP indovinata senza documentazione
+API confermata. Il publisher di default si limita quindi a marcare il
+post come pronto (`content_posts.status = "queued"`); la pubblicazione
+vera avviene tramite quel flusso esistente. Vedi `AI/DECISIONS.md` per il
+ragionamento completo.
+
+Admin: `/admin/content` (sola lettura) elenca la coda contenuti
+generata, con badge "Contenuto evergreen" / "Basato su dati reali" e
+stato di pubblicazione.
+
+Non implementato in questa fase (deliberatamente, vedi
+`AI/DECISIONS.md`): rendering delle creative in PNG (nessuna nuova
+dipendenza pesante — Playwright/Puppeteer/Satori — aggiunta finché non
+c'è contenuto reale da pubblicare che la richieda), integrazione HTTP
+diretta con l'API Metricool.
 
 ## Deployment
 

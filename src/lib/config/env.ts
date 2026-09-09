@@ -22,6 +22,8 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(8).optional(),
 
   APP_URL: z.string().url().optional(),
+
+  CONTENT_GENERATION_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

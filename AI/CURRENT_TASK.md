@@ -7,66 +7,70 @@ deve lavorare. Viene aggiornato ad ogni nuovo ciclo di sviluppo.
 
 ## Stato
 
-Phase 4 — Launch Analytics: **completata**. Le fasi 0–4 di
-`AI/MASTER_SPEC.md` §32 (l'intero MVP v1, §4) sono ora implementate.
+Phase 5 — Content Engine: **completata come infrastruttura**. Nessuna
+approvazione richiesta prima di procedere era stata posta come gate
+esplicito da questa fase (a differenza delle Phase 1–4): la spec stessa
+(§15) prevede un funzionamento a zero dati reali (modalità evergreen).
 
 ## Task completato
 
-Phase 4 (`AI/MASTER_SPEC.md` §32, §14, §33):
+Phase 5 (`AI/MASTER_SPEC.md` §15–§19):
 
-- [x] vocabolario eventi fisso e validato (`landing_view`,
-      `audit_started`, `audit_completed`, `audit_failed`,
-      `results_viewed`, `email_submitted`, `affiliate_clicked`)
-- [x] tabella `analytics_events` (Supabase + fallback in-memory)
-- [x] tracker client (`localStorage`, fire-and-forget, non blocca mai il
-      flusso utente) per gli eventi di pagina
-- [x] eventi lifecycle audit/lead/affiliato loggati server-side (più
-      affidabile del client-side — vedi `AI/DECISIONS.md` D22)
-- [x] cattura UTM (`utm_source`/`utm_medium`/`utm_campaign`) dalla
-      landing fino alla persistenza su `audits`
-- [x] metriche di funnel in admin dashboard: landing→audit avviato,
-      audit avviato→completato, risultati→email, risultati→click
-      affiliato
-- [x] `DEPLOYMENT.md`: guida al deploy in produzione (env var, migration,
-      checklist pre-lancio, limiti noti)
-- [x] 50 test totali (6 nuovi per schema eventi + calcolo funnel)
-- [x] `npm run lint`, `npm run format:check`, `npm run test` (50/50),
+- [x] soglia minima campione (n=30) per statistiche derivate da dati
+      reali, mai bypassata (`computeCookieConsentInsight`)
+- [x] libreria di contenuti evergreen, uno o più per ciascuno dei sei
+      formati (§16), nessuna statistica inventata (verificato anche da
+      test dedicato)
+- [x] cadenza settimanale di esempio da §16 (lun. Data Insight, mer.
+      Educational, ven. Conversione)
+- [x] pipeline di generazione: seleziona insight reale se disponibile,
+      altrimenti evergreen — mai il contrario
+- [x] persistenza `content_insights`, `content_posts`,
+      `content_publications` (Supabase + fallback in-memory)
+- [x] endpoint `POST /api/content/generate`, pensato per uno scheduler
+      esterno (Vercel Cron o simile), protetto da secret
+- [x] interfaccia `SocialPublisher` (§17); implementazione di default
+      "queue-only" — nessuna integrazione HTTP diretta con Metricool
+      indovinata senza documentazione API confermata (vedi
+      `AI/DECISIONS.md` D27)
+- [x] pagina admin di sola lettura `/admin/content` per la coda
+- [x] 60 test totali (10 nuovi: soglia campione, selezione evergreen vs
+      insight, integrità statistiche, scheduling settimanale)
+- [x] `npm run lint`, `npm run format:check`, `npm run test` (60/60),
       `npm run build` verdi
-- [x] verifica end-to-end con browser reale (Playwright/Chromium,
-      installato temporaneamente solo per il QA, non nel progetto):
-      submit form → risultati → cattura email → click affiliato → login
-      admin → dashboard con conteggi e tassi di conversione corretti
+- [x] verifica end-to-end reale: generazione forzata sotto soglia →
+      evergreen confermato in coda; poi 30 audit reali inviati
+      attraverso l'endpoint pubblico (rispettando il rate limit,
+      comportamento confermato corretto) → rigenerazione dello stesso
+      tipo → post basato su insight reale confermato in coda
 - [x] `AI/ARCHITECTURE.md` e `AI/DECISIONS.md` aggiornati
 
-## Stato del prodotto
+## Deliberatamente non implementato in questa fase
 
-Con Phase 4 completa, l'MVP v1 descritto in `AI/MASTER_SPEC.md` §4 è
-implementato nella sua interezza: landing, audit engine, Site Score,
-risultati, cattura email, persistenza, redirect affiliato + CTA
-CookieYes, dashboard admin, eventi analytics di base, e readiness al
-deploy in produzione (documentata, non ancora eseguita).
-
-## Nota
-
-Come per le fasi precedenti, due percorsi restano verificati solo per
-lettura del codice/test unitari, non con servizi esterni reali in questo
-sandbox di sviluppo: Supabase (nessun progetto live disponibile) e il
-provider Anthropic reale (nessuna `ANTHROPIC_API_KEY` di prodotto).
-`DEPLOYMENT.md` include i passi di smoke test da eseguire al primo deploy
-reale per colmare questi due gap.
+- **Rendering PNG delle creative** (§18): nessuna nuova dipendenza di
+  rendering (Playwright/Puppeteer/Satori/Sharp) aggiunta finché non c'è
+  contenuto reale da pubblicare che la richieda (`AI/DECISIONS.md` D28).
+- **Integrazione HTTP diretta con l'API Metricool**: il setup di
+  pubblicazione esistente dell'owner (Metricool, via i tool MCP di
+  Claude Code e la skill `carosello-freesbe`) resta il meccanismo di
+  pubblicazione reale; l'app genera e mette in coda, non pubblica da
+  sola (`AI/DECISIONS.md` D27).
 
 ## Prossimo task consigliato
 
-L'MVP v1 è completo. Le fasi successive di `AI/MASTER_SPEC.md` sono
-esplicitamente posteriori al lancio:
+Non Phase 6 (SEO Engine) o Phase 7 (Ads Engine) — `AI/MASTER_SPEC.md`
+§32 le marca esplicitamente "deliver later", da valutare solo dopo il
+lancio e con dati di conversione reali.
 
-- **Phase 5 — Content Engine**: da iniziare solo dopo aver raccolto dati
-  reali da audit (§15: soglia minima campione n=30 prima di pubblicare
-  statistiche derivate).
-- **Phase 6 — SEO Engine** e **Phase 7 — Ads Engine**: esplicitamente
-  "deliver later" in `AI/MASTER_SPEC.md` §32.
+Il lavoro applicativo utile ora è operativo, non di sviluppo:
 
-Il passo più naturale ora non è una fase nuova, ma: (1) deploy reale
-seguendo `DEPLOYMENT.md`, (2) raccolta di traffico/dati reali, (3)
-verifica dei due gap noti (Supabase live, provider Anthropic reale) in
-produzione. In attesa di indicazioni sull'owner su come procedere.
+1. **Deploy reale** seguendo `DEPLOYMENT.md`.
+2. **Raccolta di traffico reale** verso l'audit engine.
+3. Quando `content_insights` inizia a produrre insight reali (n≥30),
+   **usare il flusso Claude Code + Metricool esistente** per pubblicare
+   effettivamente i contenuti in coda su `/admin/content` — questo è un
+   task operativo ricorrente, non una modifica al codice.
+4. Chiudere i gap di verifica noti (Supabase live, provider Anthropic
+   reale) al primo deploy.
+
+In attesa di indicazioni sull'owner su come procedere.

@@ -7,8 +7,9 @@ progetto da Claude Code, task dopo task.
 
 ## Stato
 
-Phase 4 — Launch Analytics completata. MVP v1 (`AI/MASTER_SPEC.md` §4)
-implementato nella sua interezza.
+Phase 5 — Content Engine completata (infrastruttura). MVP v1
+(`AI/MASTER_SPEC.md` §4) resta implementato nella sua interezza; Phase 5
+va oltre l'MVP.
 
 ## Log
 
@@ -156,3 +157,39 @@ implementato nella sua interezza.
     conversione corretti (es. 2 audit, 100% completamento, 50% cattura
     email, 25% click affiliato su risultati visti)
   - con questa fase, l'MVP v1 di `AI/MASTER_SPEC.md` §4 è completo
+
+- 2026-09-09 — Phase 5 — Content Engine (infrastruttura):
+  - soglia minima campione n=30 (`MINIMUM_SAMPLE_SIZE`) per qualunque
+    statistica derivata da dati reali — mai bypassata, mai inventata
+  - `computeCookieConsentInsight`: prima metrica reale collegata (quota
+    di audit con problema cookie/consenso rilevato), tracciabile via
+    `sourceQueryHash`
+  - libreria evergreen scritta a mano per i sei formati di §16, usata di
+    default finché il campione reale non basta
+  - cadenza settimanale di esempio (`schedule.ts`)
+  - pipeline `generateContent`: insight reale se disponibile, altrimenti
+    evergreen, mai il contrario
+  - persistenza `content_insights`/`content_posts`/`content_publications`
+    (`supabase/migrations/0004_content_engine.sql` + fallback in-memory)
+  - `POST /api/content/generate`, protetto da secret, pensato per uno
+    scheduler esterno (nessun job in background in-process)
+  - interfaccia `SocialPublisher` (§17) con implementazione di default
+    "queue-only": trovato che l'owner ha già Metricool come setup di
+    pubblicazione (tool MCP Metricool + skill `carosello-freesbe`
+    disponibili in questa sessione) — pubblicazione reale delegata a
+    quel flusso esistente invece di un'integrazione HTTP indovinata
+    (`AI/DECISIONS.md` D27)
+  - pagina admin di sola lettura `/admin/content`
+  - deliberatamente non implementato: rendering PNG delle creative
+    (§18, nessuna dipendenza di rendering pesante aggiunta senza
+    contenuto reale da pubblicare — D28)
+  - 60 test totali (10 nuovi)
+  - aggiornati `AI/ARCHITECTURE.md`, `AI/DECISIONS.md`, `AI/CURRENT_TASK.md`
+  - verificati: `npm run lint`, `npm run format:check`, `npm run test`
+    (60/60), `npm run build` (tutti verdi)
+  - verifica end-to-end reale: generazione sotto soglia → evergreen
+    confermato in coda; poi 30 audit reali inviati rispettando il rate
+    limit di `/api/audit` (il primo tentativo in parallelo è stato
+    correttamente bloccato dal rate limiter, confermandone il
+    funzionamento sotto carico) → rigenerazione dello stesso tipo → post
+    basato su insight reale confermato in `/admin/content`
