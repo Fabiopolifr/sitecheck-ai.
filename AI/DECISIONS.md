@@ -1200,3 +1200,53 @@ ma zero rischio invece di una dipendenza vulnerabile.
 **Verifica:** 116 test totali (4 nuovi:
 `tests/parseCsvUrls.test.ts` — split su virgola, su punto e virgola,
 rimozione virgolette, celle/righe vuote scartate), build/lint verdi.
+
+### D40 — Bug in produzione: `/admin` in 500 perché `pg` restituisce `timestamptz` come `Date`, non stringa
+
+**Cosa è successo:** con `DATABASE_URL` finalmente configurato e
+funzionante su Neon (i test precedenti in questa sessione erano sempre
+girati sul fallback in-memory — vedi D13/D30/D37 sulla trasparenza
+di questo limite), `/admin` ha iniziato a dare 500 in produzione. Dal
+log reale (`console.log` su Hostinger): `TypeError:
+b.completedAt.localeCompare is not a function`, dentro
+`computeAdminMetrics` (`recentAudits` ordinati con
+`b.completedAt.localeCompare(a.completedAt)`).
+
+**Causa:** `node-postgres` deserializza automaticamente le colonne
+`timestamptz` in oggetti JS `Date`, non in stringhe — a differenza del
+gotcha opposto già documentato in D30 (le colonne `numeric` arrivano
+come stringhe). Ogni repository che legge righe da Postgres e assegna
+`row.completed_at`/`row.created_at`/ecc. direttamente a un campo
+tipizzato `string` (`AuditResult.completedAt`, `Lead.createdAt`,
+`AffiliateClick.createdAt`, `AnalyticsEvent.createdAt`,
+`ContentPost.createdAt/scheduledAt/publishedAt`) passava silenziosamente
+un `Date` al posto di una stringa ISO — TypeScript non lo intercetta a
+compile time perché `pg` tipizza le query come `any`. Il codice
+funzionava con il fallback in-memory (che scrive sempre stringhe ISO
+esplicite) e si è rotto solo quando Postgres è entrato davvero in
+gioco — motivo per cui non è emerso prima in questa sessione.
+
+**Perché non era emerso nei test:** tutti i test unitari di questa
+sessione costruiscono `AuditResult`/`Lead`/ecc. a mano con stringhe già
+corrette, e build/lint/test locali non hanno mai una connessione
+Postgres reale (stesso limite dichiarato in D13/D21/D30/D37) — è
+esattamente il tipo di bug che solo un uso reale in produzione poteva
+rivelare, e il log dell'app su Hostinger (non i log di questa sessione)
+è stato indispensabile per diagnosticarlo.
+
+**Fix:** in ogni repository (`auditsRepository.ts`, `leadsRepository.ts`,
+`affiliateRepository.ts`, `eventsRepository.ts`, `contentRepository.ts`),
+ogni campo timestamp letto da una riga Postgres passa ora da
+`new Date(row.xxx).toISOString()` invece di un'assegnazione diretta —
+`new Date(...)` accetta sia un `Date` sia una stringa già valida, quindi
+il fix è retrocompatibile con qualunque comportamento futuro del
+driver. `outreachRepository.ts` (D37, scritto più di recente) faceva
+già così correttamente — il bug riguardava solo il codice scritto prima
+di quella convenzione.
+
+**Verifica:** build/lint/116 test invariati e verdi (il bug non era
+raggiungibile dai test esistenti, che non passano mai da una connessione
+Postgres reale — la correzione è stata verificata leggendo il codice e
+confermando che ogni `row.*_at` nei file toccati passa ora da
+`new Date().toISOString()`, non con un test automatico contro Postgres
+reale, che questa sessione non può eseguire).

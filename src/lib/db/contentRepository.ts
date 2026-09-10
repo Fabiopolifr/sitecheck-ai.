@@ -124,9 +124,13 @@ export async function listContentPosts(limit = 100): Promise<ContentPost[]> {
       cta: row.cta,
       imageUrl: row.image_url,
       status: row.status,
-      scheduledAt: row.scheduled_at,
-      publishedAt: row.published_at,
-      createdAt: row.created_at,
+      scheduledAt: row.scheduled_at
+        ? new Date(row.scheduled_at).toISOString()
+        : null,
+      publishedAt: row.published_at
+        ? new Date(row.published_at).toISOString()
+        : null,
+      createdAt: new Date(row.created_at).toISOString(),
     }));
   } catch (error) {
     console.error("Failed to list content posts from Postgres:", error);

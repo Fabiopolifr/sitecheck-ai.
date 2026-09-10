@@ -80,7 +80,7 @@ export async function listAffiliateClicks(): Promise<AffiliateClick[]> {
       detectedIssue: row.detected_issue,
       utmSource: row.utm_source,
       utmCampaign: row.utm_campaign,
-      createdAt: row.created_at,
+      createdAt: new Date(row.created_at).toISOString(),
     }));
   } catch (error) {
     console.error("Failed to list affiliate clicks from Postgres:", error);

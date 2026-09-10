@@ -64,7 +64,7 @@ export async function listEvents(): Promise<AnalyticsEvent[]> {
       auditId: row.audit_id,
       eventName: row.event_name as EventName,
       metadata: row.metadata_json,
-      createdAt: row.created_at,
+      createdAt: new Date(row.created_at).toISOString(),
     }));
   } catch (error) {
     console.error("Failed to list analytics events from Postgres:", error);

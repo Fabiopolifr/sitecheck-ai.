@@ -91,8 +91,10 @@ export async function listLeads(): Promise<Lead[]> {
       supportPhone: row.support_phone,
       supportReason: row.support_reason,
       supportStatus: row.support_status,
-      supportRequestedAt: row.support_requested_at,
-      createdAt: row.created_at,
+      supportRequestedAt: row.support_requested_at
+        ? new Date(row.support_requested_at).toISOString()
+        : null,
+      createdAt: new Date(row.created_at).toISOString(),
     }));
   } catch (error) {
     console.error("Failed to list leads from Postgres:", error);
