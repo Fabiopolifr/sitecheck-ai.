@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { safeFetch } from "@/lib/security/safeFetch";
 import { normalizeUrl } from "./url";
 import { buildCategoryResults, computeSiteScore, scoreBand } from "./scoring";
+import { applyCriticalCaps } from "./criticalCaps";
 import { fetchPageSpeed } from "./pagespeed";
 import { detectTechnical } from "./detectors/technical";
 import { detectSeo } from "./detectors/seo";
@@ -89,7 +90,7 @@ export async function runAudit(
     }
   }
 
-  const categories = buildCategoryResults(checksByCategory);
+  const categories = applyCriticalCaps(buildCategoryResults(checksByCategory));
   const siteScore = computeSiteScore(categories);
 
   return {

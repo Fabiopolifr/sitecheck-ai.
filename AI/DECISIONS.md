@@ -726,3 +726,125 @@ come specifica.
 CookieYes-rilevato, priorità 3+ tracker sopra lo score, tono alta/bassa
 enfasi per score basso/alto, fallback MVP quando lo score è ignoto),
 build/lint verdi.
+
+### D34 — Critical score caps, diagnosi combinata "criticità concentrata", CTA consulenziale Freesbe (Tecnico/SEO)
+
+**Decisione:** su ulteriore specifica dettagliata dell'owner (motore di
+scoring per fasce, "critical score cap", diagnosi combinate tra sezioni,
+severità/confidence per singolo check, CTA Freesbe per Tecnico/SEO), è
+stato costruito il sottoinsieme concretamente implementabile con i
+detector reali già esistenti in questa audit **a pagina singola** (vedi
+sotto per cosa questo esclude):
+
+- **`src/features/audit/criticalCaps.ts`** (nuovo, `applyCriticalCaps`,
+  chiamato in `runAudit.ts` subito dopo `buildCategoryResults` e prima di
+  `computeSiteScore`): un piccolo insieme di regole che limita il
+  punteggio di una categoria a un tetto massimo quando un singolo
+  finding è abbastanza grave, indipendentemente da quanti altri check
+  siano passati — esattamente il problema descritto dall'owner ("100
+  controlli minori superati non devono compensare una violazione
+  grave"). Regole cablate sui check realmente prodotti dai detector
+  esistenti: `indexability` fail → SEO max 10; `robots_meta` warning
+  (noindex sulla pagina) → Tecnico max 35; `status_code` ≥500 → Tecnico
+  max 20; `https` assente → Tecnico max 30; `cmp_detected` fail +
+  `consent_before_tracking` fail (nessun CMP con tracker attivi) →
+  Cookie & Consent max 10; `cmp_detected` fail da solo → Cookie &
+  Consent max 30; `privacy_policy_link` fail → Privacy max 15. Quando più
+  regole scattano sulla stessa categoria vince il tetto più basso
+  (il finding più grave), mai una media dei tetti. `CategoryResult`
+  guadagna un campo opzionale `capApplied` (reasonCode, label, cap,
+  punteggio prima del tetto) che `CategoryDetails.tsx` mostra come
+  banner esplicito ("Il punteggio di questa sezione è stato limitato a
+  X/100 a causa di: ...") — trasparenza sul *perché*, non solo sul
+  *quanto*.
+- **`src/features/audit/comboDiagnosis.ts`** (nuovo,
+  `resolveComboDiagnosis`): individua il caso esatto descritto
+  dall'owner — una sola categoria pesata sotto 25 mentre tutte le altre
+  sono ≥75 — e restituisce un titolo/testo ("Criticità concentrata in
+  Cookie & Consent...") più un badge "1 CRITICITÀ BLOCCANTE" che sulla
+  pagina risultati **sostituisce visivamente** il solo pill "Buono"
+  accanto al punteggio, invece di lasciarlo come unico segnale. Verificato
+  end-to-end contro `pypi.org` (v. sotto).
+- **`src/features/affiliate/freesbeRecommendation.ts`** +
+  **`src/components/FreesbeRecommendation.tsx`** (nuovi): motore CTA
+  consulenziale Freesbe, parallelo a quello CookieYes ma per
+  Tecnico/SEO, che implementa **esattamente** le "FREESBE CONSULTING CTA
+  RULES" fornite dall'owner: nessuna CTA prominente per punteggio ≥90,
+  CTA soft 75-89, CTA standard 50-74, CTA prioritaria <50, CTA sempre
+  visibile se è scattato un critical cap su quella categoria (proxy
+  ragionevole di "finding HIGH/CRITICAL", essendo l'unico segnale del
+  genere già presente nel codice), CTA combinata quando sia Tecnico sia
+  SEO sono sotto 75. Link fisso a `https://freesbe.it/contatti`. Renderizzata
+  sulla pagina risultati subito sotto la card CookieYes — stessa area,
+  ma driver commerciale diverso: Cookie/Privacy → CookieYes/supporto
+  assistito, Tecnico/SEO → Freesbe, così ogni CTA punta a chi può
+  davvero risolvere quel problema, mai una CTA generica.
+- **Checkbox di supporto generalizzata**: la checkbox "Vuoi che
+  configuriamo CookieYes per te?" (D33) era finora mostrata solo nella
+  variante "open" del gate A/B (D31); ora è passata anche a
+  `GatedContent`/`EmailCaptureForm` nella variante "gated", così compare
+  ovunque il report mostri i disclaimer sui problemi rilevati, non solo
+  in una delle due varianti — richiesta esplicita dell'owner ("quando ci
+  sono i disclaimer dei problemi metti sempre il check con la email").
+- **UI/UX report**: `CategoryDetails.tsx` mostra ora, per ogni check in
+  stato "warning"/"fail", una chip di severità approssimata dal peso del
+  check (Alta ≥20, Media 10-19, nessuna sotto 10) — un proxy leggero,
+  non un nuovo campo `severity` esplicito sui detector — più il banner
+  di trasparenza sul critical cap descritto sopra.
+
+**Cosa è stato deliberatamente NON implementato, e perché (la parte
+maggioritaria della spec dell'owner):**
+
+- **Nessuna fascia/punteggio a 5 livelli (90-100/75-89/50-74/25-49/0-24)
+  con narrazione testuale dedicata per ogni fascia e ogni categoria.**
+  Il sistema esistente usa 4 bande (`scoreBand` in `scoring.ts`, D_originale)
+  con soglie diverse (85/70/50); riscriverlo a 5 fasce per 6 categorie
+  con copy dedicata per ciascuna combinazione è un lavoro di redazione
+  dei contenuti a sé, non solo di codice — il rischio concreto è
+  generare 30 blocchi di testo copy-incollati dalla spec senza che siano
+  stati verificati contro casi reali.
+- **Nessuna crawl multi-pagina.** Questo audit fetcha **una sola pagina**
+  (`runAudit.ts`, invariato) — non esiste un crawler del sito. Questo
+  esclude direttamente gran parte dei case study "TECNICO"/"SEO"
+  dell'owner che presuppongono più pagine: catene di redirect,
+  duplicazione di title su 32 pagine, pagine orfane, sitemap con
+  redirect, loop di redirect, blocco `robots.txt` su aree del sito (si
+  rileva solo il meta robots della singola pagina fetchata, non il file
+  `robots.txt`), noindex "sitewide" (si rileva solo sulla pagina
+  analizzata). Costruire un crawler è un cambiamento architetturale
+  grande (tempo di scansione, costi, rate limiting verso siti terzi) —
+  non una spunta di funzionalità.
+- **Nessun cap per "duplicate conversion event", "PII nell'URL di
+  tracking", "reject choice inefficace", "consent preferences ignorate",
+  "wrong controller/company in policy".** Nessuno di questi è oggi un
+  check prodotto dai detector: rilevare un evento duplicato richiede
+  ispezionare il codice/i tag della pagina in modo molto più profondo di
+  un fetch statico dell'HTML; PII nell'URL richiederebbe seguire i link
+  interni della pagina; "reject inefficace"/"preferenze ignorate"
+  richiedono testing comportamentale del banner (già escluso in D25/D28
+  — headless browser non aggiunto come dipendenza); il controller
+  corretto nella privacy policy richiederebbe NLP/lettura semantica del
+  testo, non pattern matching.
+- **Nessun campo `severity`/`confidence` esplicito sui detector.** I
+  detector espongono già `confidence` (0-1, usato nello scoring
+  ponderato) ma non un campo `severity` dedicato; la spec ne chiede uno
+  esplicito per ogni check con un badge "CRITICAL"/severity/confidence
+  a tre valori come nell'esempio "Meta Pixel before consent". La chip di
+  severità aggiunta in `CategoryDetails.tsx` usa il peso del check come
+  proxy ragionevole invece di introdurre un nuovo campo che nessun
+  detector popola ancora — evita di inventare un valore che i detector
+  non calcolano davvero.
+- **CTA Freesbe per finding specifico** (es. "32 pagine con title
+  duplicato" → CTA dedicata sotto quel singolo check). Implementata solo
+  a livello di categoria (Tecnico/SEO nel loro insieme), non per singolo
+  check — di nuovo limitato dall'assenza di crawl multi-pagina per la
+  maggior parte degli esempi concreti dell'owner.
+
+**Verifica:** 95 test totali (14 nuovi: `tests/criticalCaps.test.ts`,
+`tests/comboDiagnosis.test.ts`, `tests/freesbeRecommendation.test.ts`),
+build/lint verdi, verifica end-to-end reale contro `pypi.org` — cap
+cookie_consent non applicato perché il punteggio grezzo era già sotto il
+tetto (0/100, coerente con "non alzare mai un punteggio già basso"), CTA
+Freesbe SEO "Il sito ha margini di crescita SEO" mostrata correttamente
+per SEO 85/100, checkbox di supporto presente nella variante gated con
+`cookieConsentScore`/`trackerCount`/`cmpVendor` propagati correttamente.

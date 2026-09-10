@@ -21,10 +21,23 @@ export type Check = {
   weight: number;
 };
 
+/**
+ * A "critical score cap" fired for this category (AI/DECISIONS.md D34):
+ * one finding is severe enough that it caps the category score regardless
+ * of how many other checks passed, instead of letting them average it out.
+ */
+export type ScoreCap = {
+  reasonCode: string;
+  label: string;
+  cap: number;
+  cappedFrom: number;
+};
+
 export type CategoryResult = {
   category: Category;
   score: number | null;
   checks: Check[];
+  capApplied?: ScoreCap | null;
 };
 
 export type AuditStatus = "completed" | "failed";

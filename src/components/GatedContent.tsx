@@ -7,6 +7,9 @@ type GatedContentProps = {
   auditId: string;
   gated: boolean;
   children: ReactNode;
+  cookieConsentScore?: number | null;
+  trackerCount?: number;
+  cmpVendor?: string | null;
 };
 
 /**
@@ -15,7 +18,14 @@ type GatedContentProps = {
  * email form until submission succeeds — then it unlocks instantly,
  * client-side, no reload. The control variant renders children directly.
  */
-export function GatedContent({ auditId, gated, children }: GatedContentProps) {
+export function GatedContent({
+  auditId,
+  gated,
+  children,
+  cookieConsentScore = null,
+  trackerCount = 0,
+  cmpVendor = null,
+}: GatedContentProps) {
   const [unlocked, setUnlocked] = useState(!gated);
 
   if (unlocked) {
@@ -54,6 +64,10 @@ export function GatedContent({ auditId, gated, children }: GatedContentProps) {
           description="Ti mandiamo anche il link ai risultati via email."
           ctaLabel="Sblocca l'analisi"
           onSuccess={() => setUnlocked(true)}
+          showSupportOption
+          cookieConsentScore={cookieConsentScore}
+          trackerCount={trackerCount}
+          cmpVendor={cmpVendor}
         />
       </div>
     </div>

@@ -6,12 +6,15 @@ import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 import { GatedContent } from "@/components/GatedContent";
 import { AffiliateRecommendation } from "@/components/AffiliateRecommendation";
+import { FreesbeRecommendationCard } from "@/components/FreesbeRecommendation";
 import { TrackPageView } from "@/components/TrackPageView";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { BAND_LABELS, BAND_COLORS } from "@/features/audit/labels";
 import { isGatedVariant } from "@/features/audit/abTest";
 import { resolvePriorities } from "@/features/audit/priorities";
+import { resolveComboDiagnosis } from "@/features/audit/comboDiagnosis";
 import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
+import { getFreesbeRecommendation } from "@/features/affiliate/freesbeRecommendation";
 
 const SEVERITY_DOT: Record<"high" | "medium" | "low", string> = {
   high: "bg-danger",
@@ -58,6 +61,8 @@ export default async function AuditResultsPage({
   const bandColors = audit.band ? BAND_COLORS[audit.band] : null;
   const gated = isGatedVariant(audit.id);
   const recommendation = getCookieYesRecommendation(audit.categories);
+  const freesbe = getFreesbeRecommendation(audit.categories);
+  const comboDiagnosis = resolveComboDiagnosis(audit.categories);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
@@ -84,8 +89,22 @@ export default async function AuditResultsPage({
                 {BAND_LABELS[audit.band]}
               </span>
             )}
+            {comboDiagnosis && (
+              <span className="mt-2 ml-2 inline-flex rounded-full bg-danger/10 px-4 py-1.5 text-sm font-semibold text-danger">
+                {comboDiagnosis.badge}
+              </span>
+            )}
           </div>
         </div>
+
+        {comboDiagnosis && (
+          <div className="mt-6 rounded-2xl border border-danger/20 bg-danger/5 px-6 py-5">
+            <h2 className="text-base font-semibold text-danger">
+              {comboDiagnosis.headline}
+            </h2>
+            <p className="mt-2 text-sm text-zinc-700">{comboDiagnosis.body}</p>
+          </div>
+        )}
 
         {summary && (
           <p className="mt-6 max-w-2xl text-base leading-7 text-zinc-700">
@@ -144,12 +163,24 @@ export default async function AuditResultsPage({
           </div>
         )}
 
+        {freesbe.show && (
+          <div className="mt-6">
+            <FreesbeRecommendationCard {...freesbe} />
+          </div>
+        )}
+
         <div className="mt-10">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Dettaglio per categoria
           </h2>
           <div className="mt-4">
-            <GatedContent auditId={audit.id} gated={gated}>
+            <GatedContent
+              auditId={audit.id}
+              gated={gated}
+              cookieConsentScore={recommendation.cookieConsentScore}
+              trackerCount={recommendation.trackerCount}
+              cmpVendor={recommendation.cmpVendor}
+            >
               <div className="flex flex-col gap-4">
                 {audit.categories
                   .filter((c) => c.category !== "forms")
