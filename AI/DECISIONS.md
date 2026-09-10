@@ -1150,3 +1150,53 @@ categoria rilevante è presente), build/lint verdi, verifica end-to-end
 reale contro `pypi.org`: Cookie & Consent 0/100 + Privacy 64/100 →
 "🟠 Rischio elevato" mostrato correttamente con il testo del massimo
 edittale.
+
+### D39 — Caricamento file CSV per la coda outreach, non Excel binario
+
+**Decisione:** `/admin/outreach` (D37) ora accetta anche il trascinamento
+di un file (drag & drop o selezione) per popolare la coda manuale,
+oltre a incollare URL a mano. Il parsing è **CSV/TSV/testo semplice**,
+non file `.xlsx` binari.
+
+**Perché non `.xlsx` diretto:** l'unica libreria disponibile su npm per
+leggere `.xlsx` (`xlsx`/SheetJS) ha due advisory di sicurezza aperte e
+senza fix (`GHSA-4r6h-8v6p-xvw6`, prototype pollution;
+`GHSA-5pgg-2g8v-p4x9`, ReDoS) — installata e verificata con `npm audit`
+in questa sessione, poi disinstallata subito dopo aver confermato il
+problema. Il vendor stesso pubblica una build corretta sulla propria
+CDN (`cdn.sheetjs.com`), ma quel dominio non è raggiungibile dall'
+ambiente di sviluppo di questa sessione (allowlist del proxy di rete,
+stesso vincolo già dichiarato per altri domini esterni in D12/D21/D30) —
+non è stato quindi possibile verificarla. Installare una libreria con
+vulnerabilità note e senza fix disponibile per processare file caricati
+da un pannello admin non è stata considerata una scelta accettabile,
+anche se l'endpoint è protetto da autenticazione.
+
+**Cosa è stato costruito invece:**
+- `src/features/outreach/parseCsvUrls.ts` (`extractCellsFromDelimitedText`):
+  nessuna dipendenza esterna, split manuale su virgola/punto e virgola/
+  tab (i formati più comuni, incluso l'export Excel italiano che usa
+  `;` come separatore), con rimozione delle virgolette di contorno.
+- **Column-agnostic per design**: non si cerca di indovinare quale
+  colonna contenga il sito web (nome dell'header non affidabile, lingua
+  e ordine delle colonne variano da file a file) — ogni cella estratta
+  viene offerta a `normalizeUrl` esistente, e solo quelle che validano
+  come URL vengono messe in coda; nome azienda, città, telefono
+  falliscono la validazione e vengono scartati automaticamente, senza
+  bisogno di configurazione.
+- `POST /api/admin/outreach/queue` ora accetta sia il body JSON
+  originale (`{urls: [...]}`, usato dalla casella di testo) sia
+  `multipart/form-data` con un campo `file` (usato dal drag & drop) —
+  stessa protezione (cookie di sessione admin), stesso percorso di
+  accodamento (`queueUrls`, deduplicato per dominio da
+  `createOutreachSite`).
+- Limite di sicurezza: al massimo 2000 celle processate per file
+  caricato, per evitare che un file enorme blocchi la richiesta.
+
+**Cosa l'owner deve fare per usare un file Excel esistente:** aprirlo e
+"Salva con nome" → CSV prima di caricarlo — un passaggio manuale in più,
+ma zero rischio invece di una dipendenza vulnerabile.
+
+**Verifica:** 116 test totali (4 nuovi:
+`tests/parseCsvUrls.test.ts` — split su virgola, su punto e virgola,
+rimozione virgolette, celle/righe vuote scartate), build/lint verdi.
