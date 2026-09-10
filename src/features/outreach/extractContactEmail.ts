@@ -32,9 +32,9 @@ export function extractContactEmail(
   html: string,
   hostname: string,
 ): string | null {
-  const mailtoMatches = [
-    ...html.matchAll(/mailto:([^"'?\s]+)/gi),
-  ].map((m) => decodeURIComponent(m[1]).toLowerCase());
+  const mailtoMatches = [...html.matchAll(/mailto:([^"'?\s]+)/gi)].map((m) =>
+    decodeURIComponent(m[1]).toLowerCase(),
+  );
 
   const bareMatches = [
     ...html.matchAll(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi),

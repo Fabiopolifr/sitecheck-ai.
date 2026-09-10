@@ -31,7 +31,9 @@ function rowToSite(row: Record<string, unknown>): OutreachSite {
     eligibilityReason: (row.eligibility_reason as string) ?? null,
     status: row.status as OutreachSite["status"],
     createdAt: (row.created_at as Date).toISOString(),
-    analyzedAt: row.analyzed_at ? (row.analyzed_at as Date).toISOString() : null,
+    analyzedAt: row.analyzed_at
+      ? (row.analyzed_at as Date).toISOString()
+      : null,
     emailedAt: row.emailed_at ? (row.emailed_at as Date).toISOString() : null,
   };
 }
@@ -91,9 +93,7 @@ export async function createOutreachSite(
   }
 }
 
-export async function updateOutreachSite(
-  site: OutreachSite,
-): Promise<void> {
+export async function updateOutreachSite(site: OutreachSite): Promise<void> {
   if (!isDatabaseConfigured()) {
     saveMemorySite(site);
     return;

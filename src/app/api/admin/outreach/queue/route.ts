@@ -38,9 +38,12 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "A list of URLs is required" }, {
-      status: 400,
-    });
+    return NextResponse.json(
+      { error: "A list of URLs is required" },
+      {
+        status: 400,
+      },
+    );
   }
 
   let queued = 0;

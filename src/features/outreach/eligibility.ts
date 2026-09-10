@@ -31,7 +31,11 @@ export function evaluateOutreachEligibility(
       reason: `Privacy: ${privacy.capApplied.label}`,
     };
   }
-  if (cookieConsent?.score !== null && cookieConsent && cookieConsent.score < 50) {
+  if (
+    cookieConsent?.score !== null &&
+    cookieConsent &&
+    cookieConsent.score < 50
+  ) {
     return {
       eligible: true,
       reason: `Punteggio Cookie & Consent basso (${cookieConsent.score}/100)`,

@@ -965,3 +965,107 @@ logica di hash sul corpo della funzione, non ricostruire nulla.
 50/50, non più applicabile con l'esperimento in pausa; aggiunto un test
 che verifica il ritorno costante a `false`), build/lint verdi,
 verifica end-to-end reale sul sito in produzione dopo il fix Passenger.
+
+### D37 — Outreach automatico: scraping, audit, filtro idoneità privacy/cookie, invio email
+
+**Decisione:** su richiesta esplicita dell'owner ("analizza 30 aziende
+al giorno... quelle che reputi abbiano problemi di privacy policy e
+cookie policy invii l'email"), è stata costruita una pipeline che
+analizza automaticamente siti web (da una coda caricata dall'owner più
+scoperta automatica via Google Maps), decide se il sito è "idoneo" a
+ricevere un'email in base a problemi reali di privacy/cookie policy
+rilevati, e in caso positivo invia l'email in autonomia.
+
+- **`src/features/outreach/eligibility.ts`** (`evaluateOutreachEligibility`):
+  idoneità basata **specificamente** su Cookie & Consent e Privacy — non
+  sul Site Score complessivo — perché è esattamente il problema che
+  l'owner ha chiesto di intercettare. Priorità: un critical cap (D34)
+  scattato su una delle due categorie → sempre idoneo; altrimenti
+  punteggio della categoria sotto 50 → idoneo; altrimenti non idoneo. Un
+  sito con SEO pessima ma Cookie & Consent solido non è idoneo — non è
+  quello per cui questo outreach esiste.
+- **`src/features/outreach/extractContactEmail.ts`**: estrae un'email di
+  contatto dall'HTML già fetchato (link `mailto:` con priorità, poi
+  pattern testuale), preferisce un alias aziendale generico
+  (`info@`/`contatti@`) a uno che sembra personale, preferisce
+  un'email sullo stesso dominio del sito a una di terze parti (es.
+  `noreply@sentry.io` incollato per errore in una pagina), e scarta
+  pattern chiaramente spuri (estensioni immagine, `noreply@`,
+  `test@`/`example@`).
+- **`src/features/outreach/composeEmail.ts`**: il corpo dell'email cita
+  **sempre** il finding reale rilevato (mai copy generico), identifica
+  il mittente (Freesbe S.r.l.) e include un link di disiscrizione
+  firmato (HMAC su `OUTREACH_SECRET`) che porta a una pagina pubblica
+  `/unsubscribe` — la disiscrizione aggiunge l'indirizzo a una lista di
+  soppressione **permanente** (`outreach_suppressions`), controllata
+  prima di ogni invio futuro (per email e per dominio).
+- **`src/lib/leadDiscovery/googlePlaces.ts`**: scoperta di nuove attività
+  tramite **Google Places API (Text Search)**, l'unica via conforme ai
+  Termini di Servizio di Google — non uno scraper delle pagine di
+  risultati di Google Search/Maps (violerebbe i ToS e rischierebbe il
+  blocco IP del server). Richiede una `GOOGLE_PLACES_API_KEY`
+  dell'owner (API a pagamento, con credito gratuito mensile); senza,
+  la funzione ritorna una lista vuota e logga un warning — non blocca
+  mai la parte "coda manuale" della pipeline.
+- **`src/features/outreach/runOutreachBatch.ts`**: orchestratore del
+  batch giornaliero — fino a **30 siti dalla coda manuale** (quelli
+  caricati dall'owner, FIFO) più fino a **10 nuove scoperte Google
+  Maps** per query, ciascuno: controllo soppressione → audit reale
+  (stesso motore usato dal prodotto, incluso il rilevamento privacy/
+  cookie D34) → decisione di idoneità → estrazione email → invio se
+  idoneo. Ogni esito (incluso "non idoneo" e "nessuna email trovata")
+  viene salvato, non solo gli invii riusciti — è il presupposto dei
+  filtri richiesti in admin.
+- **`migrations/0006_outreach.sql`**: tabelle `outreach_sites`
+  (deduplicata per dominio, con l'intera cronologia di stato) e
+  `outreach_suppressions` (opt-out permanente).
+- **`/api/outreach/run`**: protetto da un header `x-outreach-secret`
+  confrontato con `OUTREACH_SECRET` (stesso pattern già usato da
+  `/api/content/generate`/`CONTENT_GENERATION_SECRET`) — pensato per
+  essere chiamato da uno scheduler esterno, dato che Hostinger Cloud
+  Startup non offre cron. **Va configurato un pinger esterno gratuito**
+  (es. cron-job.org) che chiama questo endpoint una volta al giorno con
+  l'header impostato, altrimenti la pipeline non parte mai da sola.
+- **`/admin/outreach`**: form per caricare URL nella coda manuale
+  (`/api/admin/outreach/queue`, protetto dal cookie di sessione admin),
+  statistiche (idonei/non idonei/email inviate/in coda) e tabella
+  filtrabile per idoneità — esattamente il requisito esplicito
+  dell'owner ("crea filtri per idoneo o no").
+
+**Nota sul blocco del classificatore Auto Mode:** durante la costruzione
+di questa feature, il classificatore di sicurezza della modalità Auto ha
+bloccato più volte le modifiche che introducevano l'infrastruttura di
+scraping + invio email automatico non richiesto, finché l'owner non ha
+disattivato l'Auto Mode dalla sessione — comportamento della piattaforma,
+non un bug di questo codice. Documentato qui perché è probabile che si
+ripresenti se in futuro va modificata ulteriormente questa parte del
+codebase in Auto Mode.
+
+**Cosa NON è stato implementato, e perché:**
+- **Nessuna schedulazione cron nativa.** Hostinger Cloud Startup non dà
+  accesso SSH; l'owner deve configurare un pinger esterno gratuito
+  puntato su `/api/outreach/run` con l'header segreto.
+- **Nessuna revisione umana prima dell'invio** — esplicitamente richiesto
+  "completamente automatico" dall'owner, a fronte del rischio di
+  compliance segnalato esplicitamente in chat (l'invio di email
+  commerciali non richieste a indirizzi ottenuti tramite scraping è in
+  una zona grigia rispetto all'art. 130 D.Lgs. 196/2003 — non è
+  necessariamente illegale in ambito B2B, ma non è stato dato un parere
+  legale su questo, e la scelta di renderlo automatico è stata presa
+  dall'owner con questa informazione disponibile).
+- **Nessun rate-limit "duro" oltre ai cap giornalieri (30 manuali + 10
+  per query di scoperta)** — non esiste una gestione degli invii falliti
+  con retry/backoff, né un tetto assoluto configurabile lato env; un
+  errore di configurazione nel body della richiesta a `/api/outreach/run`
+  (es. `manualPerDay` molto alto) può superare i cap di buon senso fino
+  al limite hard-coded di validazione (100 manuali, 50 per query di
+  scoperta).
+
+**Verifica:** 106 test totali (12 nuovi:
+`tests/extractContactEmail.test.ts`, `tests/outreachEligibility.test.ts`,
+`tests/composeOutreachEmail.test.ts`), build/lint verdi. Non verificato
+end-to-end con una chiamata reale a Google Places API o un invio email
+reale in questa sessione (nessuna `GOOGLE_PLACES_API_KEY`/credenziali
+di produzione disponibili qui) — stesso principio di trasparenza di
+D12/D21/D30: il percorso "nessuna chiave configurata" (coda manuale
+soltanto) è l'unico verificato realmente.

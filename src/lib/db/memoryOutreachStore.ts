@@ -1,4 +1,7 @@
-import type { OutreachSite, OutreachSuppression } from "@/features/outreach/types";
+import type {
+  OutreachSite,
+  OutreachSuppression,
+} from "@/features/outreach/types";
 
 const globalForStore = globalThis as unknown as {
   __siteCheckOutreachSites?: OutreachSite[];
@@ -25,7 +28,9 @@ export function findOutreachSiteByDomain(domain: string): OutreachSite | null {
   return sites.find((s) => s.domain === domain) ?? null;
 }
 
-export function saveOutreachSuppression(suppression: OutreachSuppression): void {
+export function saveOutreachSuppression(
+  suppression: OutreachSuppression,
+): void {
   suppressions.push(suppression);
 }
 

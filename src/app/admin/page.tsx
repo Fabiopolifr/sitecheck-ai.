@@ -49,6 +49,12 @@ export default async function AdminDashboardPage() {
             >
               Coda contenuti
             </Link>
+            <Link
+              href="/admin/outreach"
+              className="text-sm text-zinc-500 hover:text-zinc-800"
+            >
+              Outreach
+            </Link>
             <AdminLogoutButton />
           </div>
         </div>
