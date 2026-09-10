@@ -78,8 +78,17 @@ export function getCookieYesRecommendation(
     privacyChecks.find((c) => c.id === "privacy_policy_link")?.status ===
     "fail";
 
+  const cmpEntirelyAbsent = cmpCheck?.status === "fail";
+
   let score = 0;
   if (trackerCount > 0 && !hasCmp) score += 40;
+  // A missing CMP is itself the single highest-weighted check in the
+  // whole audit (weight 70/100 of the cookie_consent category) — it must
+  // score high enough to surface a recommendation even when no trackers
+  // were detected on this particular fetch (a static HTML snapshot can
+  // miss client-side-injected trackers; the absence of any consent
+  // mechanism is a real, standalone finding regardless).
+  if (cmpEntirelyAbsent) score += 35;
   if (hasGoogleTracker || hasMetaPixel || hasTikTokPixel) score += 25;
   if (cookiePolicyMissing) score += 20;
   if (privacyPolicyMissing) score += 15;
@@ -105,6 +114,26 @@ export function getCookieYesRecommendation(
         "Registro dei consensi",
       ],
       ctaLabel: "Configura la gestione del consenso",
+    };
+  }
+
+  // Case A2 — no consent management at all, independent of trackers
+  // (e.g. no trackers detected on this fetch, but the site has no CMP,
+  // no cookie banner, nothing).
+  if (cmpEntirelyAbsent) {
+    return {
+      showRecommendation: true,
+      priority,
+      reasonCode: "no_cmp_detected",
+      title: "Nessun sistema di gestione dei cookie rilevato",
+      description:
+        "Durante la scansione non abbiamo rilevato alcuna piattaforma di gestione del consenso (CMP) né un banner cookie sul sito.",
+      benefits: [
+        "Scanner automatico cookie e tracker",
+        "Banner di consenso personalizzabile",
+        "Registro dei consensi",
+      ],
+      ctaLabel: "Configura la gestione dei cookie",
     };
   }
 
