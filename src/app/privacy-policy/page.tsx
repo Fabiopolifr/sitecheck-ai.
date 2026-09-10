@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — SiteCheck AI",
+  title: "Privacy Policy — FreeCookieBe",
 };
 
 export default function PrivacyPolicyPage() {
@@ -43,10 +43,10 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="text-base font-semibold text-zinc-900">
-              Cosa fa SiteCheck AI
+              Cosa fa FreeCookieBe
             </h2>
             <p className="mt-2">
-              SiteCheck AI è uno strumento che analizza automaticamente un sito
+              FreeCookieBe è uno strumento che analizza automaticamente un sito
               web fornito dall&apos;utente (cookie/consenso, privacy, tracking,
               SEO e performance) e restituisce un punteggio sintetico e un
               report. Questa pagina descrive quali dati raccogliamo per far

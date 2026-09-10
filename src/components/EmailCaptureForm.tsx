@@ -145,7 +145,7 @@ export function EmailCaptureForm({
             onChange={(event) => setConsent(event.target.checked)}
             className="mt-0.5"
           />
-          Acconsento a ricevere comunicazioni marketing da SiteCheck AI
+          Acconsento a ricevere comunicazioni marketing da FreeCookieBe
           (facoltativo, separato dall&apos;invio del report).
         </label>
 

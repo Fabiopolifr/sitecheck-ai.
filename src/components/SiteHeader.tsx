@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogomarkIcon } from "@/components/icons";
 
 export function SiteHeader() {
   return (
@@ -6,18 +7,13 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-900"
+          className="flex items-center gap-2 text-base font-semibold tracking-tight text-brand-navy"
         >
-          <span
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white"
-            aria-hidden
-          >
-            S
-          </span>
-          SiteCheck AI
+          <LogomarkIcon className="h-8 w-8" />
+          Free<span className="text-accent">Cookie</span>be
         </Link>
         <p className="hidden text-sm text-zinc-500 sm:block">
-          Analisi tecnica per agenzie immobiliari
+          Privacy semplice. Websites più sicuri.
         </p>
       </div>
     </header>

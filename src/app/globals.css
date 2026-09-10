@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * FreeCookieBe brand palette (AI/DECISIONS.md D35): --accent/--accent-soft
+ * carry the brand orange (used across the app for CTAs, links, badges,
+ * gauges), so switching the two variables here re-themes the whole app
+ * instead of a mass class rename. --brand-navy is the dark
+ * logomark/wordmark color from the FreeCookieBe mark.
+ */
 :root {
   --background: #ffffff;
   --foreground: #18181b;
-  --accent: #4338ca;
-  --accent-soft: #eef2ff;
+  --accent: #c8863f;
+  --accent-soft: #faf0e2;
+  --brand-navy: #10213c;
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
@@ -15,6 +23,7 @@
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-brand-navy: var(--brand-navy);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);

@@ -25,9 +25,9 @@ async function buildReportEmail(
 ): Promise<{ subject: string; text: string; html: string }> {
   if (!audit || audit.status !== "completed") {
     return {
-      subject: "Il tuo report SiteCheck AI",
-      text: `Grazie per aver usato SiteCheck AI. Rivedi i risultati qui: ${resultsUrl}`,
-      html: `<p>Grazie per aver usato SiteCheck AI.</p><p><a href="${resultsUrl}">Rivedi i risultati</a></p>`,
+      subject: "Il tuo report FreeCookieBe",
+      text: `Grazie per aver usato FreeCookieBe. Rivedi i risultati qui: ${resultsUrl}`,
+      html: `<p>Grazie per aver usato FreeCookieBe.</p><p><a href="${resultsUrl}">Rivedi i risultati</a></p>`,
     };
   }
 
@@ -36,7 +36,7 @@ async function buildReportEmail(
   const priorities = resolvePriorities(allChecks, summary);
   const bandLabel = audit.band ? BAND_LABELS[audit.band] : null;
 
-  const subject = `Il tuo Site Score: ${audit.siteScore ?? "—"}/100 — SiteCheck AI`;
+  const subject = `Il tuo Site Score: ${audit.siteScore ?? "—"}/100 — FreeCookieBe`;
 
   const priorityLines = priorities
     .map((p, i) => `${i + 1}. ${p.title} — ${p.reason}`)
@@ -66,7 +66,7 @@ async function buildReportEmail(
     <div style="font-family:sans-serif;color:#18181b;max-width:520px">
       <p>Ecco il riepilogo dell'analisi di <strong>${escapeHtml(audit.finalUrl ?? audit.requestedUrl)}</strong>.</p>
       <p style="font-size:32px;font-weight:600;margin:16px 0 4px">${audit.siteScore ?? "—"}<span style="font-size:16px;color:#71717a">/100</span></p>
-      ${bandLabel ? `<p style="color:#4338ca;font-weight:500;margin-top:0">${escapeHtml(bandLabel)}</p>` : ""}
+      ${bandLabel ? `<p style="color:#c8863f;font-weight:500;margin-top:0">${escapeHtml(bandLabel)}</p>` : ""}
       ${summary ? `<p>${escapeHtml(summary.summary)}</p>` : ""}
       ${
         priorities.length > 0
@@ -74,7 +74,7 @@ async function buildReportEmail(
           : ""
       }
       <p style="margin-top:24px">
-        <a href="${resultsUrl}" style="background:#4338ca;color:#fff;padding:10px 20px;border-radius:999px;text-decoration:none;display:inline-block">Rivedi il report completo</a>
+        <a href="${resultsUrl}" style="background:#c8863f;color:#fff;padding:10px 20px;border-radius:999px;text-decoration:none;display:inline-block">Rivedi il report completo</a>
       </p>
     </div>
   `;

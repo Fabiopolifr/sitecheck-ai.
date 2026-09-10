@@ -1,4 +1,4 @@
-# SiteCheck AI
+# FreeCookieBe
 
 Analisi tecnica automatizzata del sito web per agenzie immobiliari (e, in
 futuro, altri settori): cookie/consent, privacy, tracking, SEO e

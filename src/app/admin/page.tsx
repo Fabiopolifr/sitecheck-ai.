@@ -40,7 +40,7 @@ export default async function AdminDashboardPage() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-zinc-900">
-            SiteCheck AI — Admin
+            FreeCookieBe — Admin
           </h1>
           <div className="flex items-center gap-4">
             <Link

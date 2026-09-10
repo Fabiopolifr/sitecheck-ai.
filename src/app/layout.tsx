@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SiteCheck AI — Analisi tecnica del tuo sito",
+  title: "FreeCookieBe — Analisi tecnica del tuo sito",
   description:
     "Analizza in pochi secondi cookie, tracking, SEO, performance e altri elementi tecnici del sito della tua agenzia.",
 };

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — SiteCheck AI",
+  title: "Cookie Policy — FreeCookieBe",
 };
 
 export default function CookiePolicyPage() {
@@ -18,7 +18,7 @@ export default function CookiePolicyPage() {
         <div className="mt-10 flex flex-col gap-8 text-sm leading-7 text-zinc-700">
           <section>
             <p>
-              SiteCheck AI, servizio di Freesbe S.r.l. (P.IVA 09004560729), usa
+              FreeCookieBe, servizio di Freesbe S.r.l. (P.IVA 09004560729), usa
               un numero minimo di cookie tecnici. Non utilizziamo cookie di
               profilazione, marketing o tracciamento pubblicitario, e non
               condividiamo dati di navigazione con reti pubblicitarie o social

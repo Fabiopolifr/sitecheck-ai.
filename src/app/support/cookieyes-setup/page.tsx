@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 
 export const metadata: Metadata = {
-  title: "Configurazione assistita CookieYes — SiteCheck AI",
+  title: "Configurazione assistita CookieYes — FreeCookieBe",
 };
 
 const INCLUDES = [

@@ -49,7 +49,7 @@ const EVERGREEN_LIBRARY: Record<ContentType, EvergreenTemplate[]> = {
   ],
   site_score_concept: [
     {
-      headline: "Cos'è il Site Score di SiteCheck AI",
+      headline: "Cos'è il Site Score di FreeCookieBe",
       body: "Un punteggio da 0 a 100 calcolato su sei aree: tecnico, SEO, privacy, cookie e consenso, tracking, performance. Non sostituisce una consulenza legale — è un punto di partenza tecnico.",
       cta: "Calcola il tuo Site Score",
     },

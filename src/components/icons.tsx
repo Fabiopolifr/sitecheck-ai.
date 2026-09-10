@@ -1,5 +1,38 @@
 type IconProps = { className?: string };
 
+/**
+ * FreeCookieBe logomark: a bitten cookie with a navy check-shield badge,
+ * simplified for legibility at small sizes (header, favicon). Colors are
+ * fixed to the brand palette (not `currentColor`) since the mark itself
+ * is brand-specific, unlike the other icons in this file.
+ */
+export function LogomarkIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} aria-hidden>
+      <circle cx="14" cy="16" r="11" fill="#c8863f" />
+      <circle cx="10.5" cy="12" r="1.6" fill="#7a4a1f" />
+      <circle cx="15" cy="10.5" r="1.4" fill="#7a4a1f" />
+      <circle cx="9.5" cy="18" r="1.5" fill="#7a4a1f" />
+      <circle cx="14.5" cy="19.5" r="1.3" fill="#7a4a1f" />
+      <circle cx="18.5" cy="15" r="1.3" fill="#7a4a1f" />
+      <g transform="translate(14,13) scale(0.6)">
+        <path
+          d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"
+          fill="#10213c"
+        />
+        <path
+          d="M9 12l2 2 4-4"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      </g>
+    </svg>
+  );
+}
+
 export function CookieIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>

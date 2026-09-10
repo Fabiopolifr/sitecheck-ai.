@@ -848,3 +848,64 @@ tetto (0/100, coerente con "non alzare mai un punteggio già basso"), CTA
 Freesbe SEO "Il sito ha margini di crescita SEO" mostrata correttamente
 per SEO 85/100, checkbox di supporto presente nella variante gated con
 `cookieConsentScore`/`trackerCount`/`cmpVendor` propagati correttamente.
+
+### D35 — Rebrand a "FreeCookieBe": nome prodotto, palette, favicon
+
+**Decisione:** l'owner ha fornito un logo (cookie con scudo/spunta,
+navy + arancione) con il nome del brand "FreeCookieBe" e il payoff
+"Privacy semplice. Websites più sicuri." Tutte le stringhe utente-facing
+che dicevano "SiteCheck AI" sono state rinominate a "FreeCookieBe": header
+(`SiteHeader.tsx`), footer, titolo/metadata (`layout.tsx`), dashboard
+admin, testo del consenso marketing nel form lead, copy delle email
+transazionali (`api/leads/route.ts`), pagine privacy/cookie policy,
+pagina `/support/cookieyes-setup`, content engine (`evergreen.ts`,
+`generate.ts`), `README.md`.
+
+**Cosa NON è stato rinominato, deliberatamente:** i documenti interni di
+processo in `AI/` (`MASTER_SPEC.md`, `ARCHITECTURE.md`, `CURRENT_TASK.md`,
+`CHANGELOG_AI.md`, e questo stesso `DECISIONS.md`) restano intestati
+"SiteCheck AI" — sono la cronologia di sviluppo e la spec canonica
+(D2/D7: `MASTER_SPEC.md` non va riscritto arbitrariamente, è prodotto
+dall'owner) e riscriverli avrebbe significato alterare un documento
+storico invece di limitarsi a quanto richiesto ("usa questo marchio...
+per il sito e la favicon" — il prodotto rivolto agli utenti, non la
+documentazione interna del progetto).
+
+**Palette e favicon:**
+- `src/app/globals.css`: `--accent`/`--accent-soft` sono stati cambiati
+  dall'indigo originale (`#4338ca`) all'arancione del brand (`#c8863f`
+  / `#faf0e2`) — riusando le stesse due variabili invece di rinominare
+  ogni classe `bg-accent`/`text-accent` nel codebase, così bottoni CTA,
+  link, badge e la fascia "buono" del gauge punteggio si ri-tematizzano
+  automaticamente. Aggiunto `--brand-navy` (`#10213c`, colore del
+  wordmark/logomark) per l'header. Anche i due colori inline hardcoded
+  nell'email HTML del report (`api/leads/route.ts`, non passavano dalle
+  variabili CSS) sono stati aggiornati allo stesso arancione.
+- **Nuovo `LogomarkIcon`** (`src/components/icons.tsx`): un SVG inline
+  che approssima il marchio fornito (cookie arancione con chip di
+  cioccolato + scudo/spunta navy in basso a destra), semplificato per
+  restare leggibile alle dimensioni ridotte di header/favicon. Usato in
+  `SiteHeader.tsx` al posto del vecchio badge "S".
+- **Favicon rigenerata**: `src/app/favicon.ico` è stata rigenerata da
+  zero (header ICO scritto a mano con PNG embedded a 16/32/48px via
+  `sharp`, verificato con `file` che il risultato è un `.ico` valido)
+  invece di lasciare la vecchia icona indigo. Aggiunto anche
+  `src/app/icon.svg` (convenzione Next.js App Router, ha priorità nei
+  browser moderni) con lo stesso mark in SVG vettoriale.
+
+**Limite dichiarato — l'immagine del logo fornita dall'owner non è mai
+arrivata come file su disco**, solo come contenuto visivo inline nel
+messaggio; questa sessione non ha un modo per salvare bytes da
+un'immagine incollata in chat. Il logomark implementato qui è quindi
+una **ricostruzione approssimata** (colori e composizione lette a
+vista dall'immagine, non un'estrazione pixel-perfect del file originale)
+— non un uso diretto dell'asset originale. Se l'owner ha il file PNG/SVG
+sorgente e vuole il logo esatto (non l'approssimazione), va condiviso
+come file (percorso nel repository, o allegato scaricabile) così può
+essere usato direttamente al posto di `LogomarkIcon`/`favicon.ico`/
+`icon.svg`.
+
+**Verifica:** build/lint/95 test invariati e verdi, verifica end-to-end
+reale (`next start` locale): header renderizza "Free**Cookie**be" con
+"Cookie" in arancione brand, footer "FreeCookieBe", `/icon.svg` servito
+correttamente con i colori `#c8863f`/`#10213c`.
