@@ -24,6 +24,11 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
 
   CONTENT_GENERATION_SECRET: z.string().min(16).optional(),
+
+  /** Google Places API (Text Search + Details) — powers automated lead discovery. See AI/DECISIONS.md D37. */
+  GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
+  /** Shared secret an external scheduler sends to trigger the daily outreach batch — same pattern as CONTENT_GENERATION_SECRET. */
+  OUTREACH_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
