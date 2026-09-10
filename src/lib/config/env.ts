@@ -26,38 +26,35 @@ const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 /**
- * Hosting panels (Hostinger included) commonly declare every configured
- * env var key even when its value is left blank, producing "" rather
- * than an absent key. Every field above is `.optional()` — meaning
- * "absent is fine" — but Zod's `.optional()` only accepts `undefined`,
- * not an empty string, so a single blank optional field (e.g. an unused
- * COOKIEYES_AFFILIATE_URL) would otherwise fail `.url()`/`.email()`
- * validation and take down the entire app at boot. Treat blank strings
- * as unset before validating, so only genuinely malformed non-empty
- * values are rejected.
+ * Every field in envSchema is `.optional()` — there is no field the app
+ * cannot run without a real value for — so a malformed *optional* field
+ * (a stray space, a URL missing "https://", a hosting panel storing a
+ * blank field as something other than an absent key) must never take
+ * down the entire app at boot. Validate field by field: a field that
+ * fails validation is dropped (treated as unset, with a warning),
+ * instead of one bad field crashing every route via a single thrown
+ * error at module load. This is what actually happened in production on
+ * Hostinger with COOKIEYES_AFFILIATE_URL — see AI/DECISIONS.md.
  */
-function stripBlankValues(
-  input: NodeJS.ProcessEnv,
-): Record<string, string | undefined> {
-  const result: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(input)) {
-    result[key] = value === "" ? undefined : value;
-  }
-  return result;
-}
-
 function loadEnv(): Env {
-  const parsed = envSchema.safeParse(stripBlankValues(process.env));
+  const shape = envSchema.shape;
+  const result: Record<string, unknown> = {};
 
-  if (!parsed.success) {
-    console.error(
-      "Invalid environment variables:",
-      parsed.error.flatten().fieldErrors,
-    );
-    throw new Error("Invalid environment variables");
+  for (const key of Object.keys(shape) as (keyof typeof shape)[]) {
+    const raw = process.env[key];
+    if (raw === undefined || raw === "") continue;
+
+    const fieldResult = shape[key].safeParse(raw);
+    if (fieldResult.success) {
+      result[key] = fieldResult.data;
+    } else {
+      console.warn(
+        `Ignoring invalid value for env var ${key}: ${fieldResult.error.issues.map((i) => i.message).join(", ")}`,
+      );
+    }
   }
 
-  return parsed.data;
+  return result as Env;
 }
 
 export const env = loadEnv();

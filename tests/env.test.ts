@@ -5,7 +5,7 @@ describe("env config module", () => {
     await expect(import("@/lib/config/env")).resolves.toBeDefined();
   });
 
-  describe("blank optional env vars", () => {
+  describe("malformed optional env vars", () => {
     const originalValue = process.env.COOKIEYES_AFFILIATE_URL;
 
     afterEach(() => {
@@ -13,10 +13,9 @@ describe("env config module", () => {
       vi.resetModules();
     });
 
-    it("treats an empty string as unset instead of an invalid URL", async () => {
+    it("treats an empty string as unset", async () => {
       // Hosting panels commonly declare every configured key even when
-      // left blank ("" rather than an absent key) — this must not crash
-      // the whole app at boot for an optional field (see env.ts).
+      // left blank ("" rather than an absent key).
       process.env.COOKIEYES_AFFILIATE_URL = "";
       vi.resetModules();
 
@@ -24,11 +23,15 @@ describe("env config module", () => {
       expect(env.COOKIEYES_AFFILIATE_URL).toBeUndefined();
     });
 
-    it("still rejects a genuinely malformed non-empty URL", async () => {
+    it("drops a genuinely malformed non-empty value instead of crashing", async () => {
+      // A single bad optional field (e.g. a URL missing "https://") must
+      // never take the whole app down at boot — see env.ts and
+      // AI/DECISIONS.md for the production incident this reproduces.
       process.env.COOKIEYES_AFFILIATE_URL = "not-a-url";
       vi.resetModules();
 
-      await expect(import("@/lib/config/env")).rejects.toThrow();
+      const { env } = await import("@/lib/config/env");
+      expect(env.COOKIEYES_AFFILIATE_URL).toBeUndefined();
     });
   });
 });
