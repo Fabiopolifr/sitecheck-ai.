@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
+import {
+  getCookieYesRecommendation,
+  resolveSupportBoxCopy,
+} from "@/features/affiliate/cookieyesRecommendation";
 import type { Category, Check, CategoryResult } from "@/features/audit/types";
 
 function check(
@@ -252,5 +255,52 @@ describe("getCookieYesRecommendation", () => {
       },
     ]);
     expect(rec.showSupportCta).toBe(false);
+  });
+});
+
+describe("resolveSupportBoxCopy", () => {
+  it("uses the CookieYes-already-detected copy regardless of score", () => {
+    const copy = resolveSupportBoxCopy({
+      cookieConsentScore: 30,
+      trackerCount: 0,
+      cmpVendor: "cookieyes",
+    });
+    expect(copy.title).toContain("CookieYes è già presente");
+  });
+
+  it("prioritizes the 3+ tracker copy over the score tier", () => {
+    const copy = resolveSupportBoxCopy({
+      cookieConsentScore: 90,
+      trackerCount: 3,
+      cmpVendor: null,
+    });
+    expect(copy.title).toContain("più strumenti di tracking");
+  });
+
+  it("uses high-emphasis copy for a low cookieConsentScore", () => {
+    const copy = resolveSupportBoxCopy({
+      cookieConsentScore: 20,
+      trackerCount: 0,
+      cmpVendor: null,
+    });
+    expect(copy.title).toContain("priorità");
+  });
+
+  it("uses low-emphasis copy for a high cookieConsentScore", () => {
+    const copy = resolveSupportBoxCopy({
+      cookieConsentScore: 90,
+      trackerCount: 0,
+      cmpVendor: null,
+    });
+    expect(copy.title).toContain("verifica della configurazione");
+  });
+
+  it("falls back to the MVP default copy when the score is unknown", () => {
+    const copy = resolveSupportBoxCopy({
+      cookieConsentScore: null,
+      trackerCount: 0,
+      cmpVendor: null,
+    });
+    expect(copy.title).toBe("Vuoi che configuriamo CookieYes per te?");
   });
 });

@@ -17,6 +17,10 @@ export type CookieYesRecommendation = {
   /** Whether to show the "€99 assisted setup" secondary CTA — see AI/DECISIONS.md. */
   showSupportCta: boolean;
   supportCtaCopy: string;
+  /** Number of trackers detected with status "warning" — exposed for the report-form support box copy tier. */
+  trackerCount: number;
+  /** CMP vendor id if one was identified (e.g. "cookieyes", "iubenda"), null otherwise. */
+  cmpVendor: string | null;
 };
 
 const NONE: CookieYesRecommendation = {
@@ -31,6 +35,8 @@ const NONE: CookieYesRecommendation = {
   cookieConsentScore: null,
   showSupportCta: false,
   supportCtaCopy: "",
+  trackerCount: 0,
+  cmpVendor: null,
 };
 
 function checksFor(categories: CategoryResult[], category: string) {
@@ -58,6 +64,66 @@ function supportCtaCopyFor(trackerCount: number): string {
     return "Vuoi risparmiare tempo? Lo configuriamo per te a €99.";
   }
   return "Puoi configurarlo in autonomia, oppure te lo configuriamo noi a €99.";
+}
+
+export type SupportBoxCopy = {
+  title: string;
+  body: string;
+  checkboxLabel: string;
+};
+
+/**
+ * Copy tier for the "Vuoi che configuriamo CookieYes per te?" box shown
+ * in the report-request form (distinct from the results-page
+ * recommendation card): emphasis and wording scale with how much the
+ * audit found wrong, per the case table in AI/DECISIONS.md.
+ */
+export function resolveSupportBoxCopy({
+  cookieConsentScore,
+  trackerCount,
+  cmpVendor,
+}: {
+  cookieConsentScore: number | null;
+  trackerCount: number;
+  cmpVendor: string | null;
+}): SupportBoxCopy {
+  if (cmpVendor === "cookieyes") {
+    return {
+      title: "CookieYes è già presente sul tuo sito",
+      body: "Possiamo verificare la configurazione attuale e aiutarti a ottimizzarla a €99 una tantum.",
+      checkboxLabel: "Voglio richiedere una verifica tecnica",
+    };
+  }
+
+  if (trackerCount >= 3) {
+    return {
+      title: "Il tuo sito utilizza più strumenti di tracking",
+      body: "Possiamo aiutarti a configurare CookieYes tenendo conto degli strumenti rilevati durante l'audit. Servizio di configurazione iniziale: €99 una tantum.",
+      checkboxLabel: "Voglio essere ricontattato",
+    };
+  }
+
+  if (cookieConsentScore !== null && cookieConsentScore < 50) {
+    return {
+      title: "Vuoi risolvere questa priorità con il nostro supporto?",
+      body: "Abbiamo rilevato diversi elementi legati a cookie, consenso o tracking. Possiamo occuparci della configurazione iniziale di CookieYes a €99 una tantum.",
+      checkboxLabel: "Sì, desidero supporto per la configurazione",
+    };
+  }
+
+  if (cookieConsentScore !== null && cookieConsentScore >= 80) {
+    return {
+      title: "Vuoi una verifica della configurazione?",
+      body: "Possiamo controllare e ottimizzare CookieYes sul tuo sito a €99 una tantum.",
+      checkboxLabel: "Desidero essere ricontattato",
+    };
+  }
+
+  return {
+    title: "Vuoi che configuriamo CookieYes per te?",
+    body: "Possiamo occuparci dell'installazione e della configurazione tecnica iniziale sul tuo sito a €99 una tantum.",
+    checkboxLabel: "Sì, desidero essere ricontattato per il supporto CookieYes",
+  };
 }
 
 /**
@@ -98,6 +164,8 @@ export function getCookieYesRecommendation(
         "Sul sito è già presente CookieYes. Verifica la configurazione del consenso in base agli elementi rilevati durante la scansione.",
       ctaLabel: "Verifica la configurazione del consenso",
       cookieConsentScore,
+      trackerCount,
+      cmpVendor,
       showSupportCta: true,
       supportCtaCopy:
         "Vuoi che controlliamo la configurazione? Verifica e ottimizzazione tecnica — €99 una tantum.",
@@ -144,7 +212,8 @@ export function getCookieYesRecommendation(
     trackerCount >= 2;
   const supportCtaCopy = showSupportCta ? supportCtaCopyFor(trackerCount) : "";
 
-  if (score < 20) return { ...NONE, cookieConsentScore };
+  if (score < 20)
+    return { ...NONE, cookieConsentScore, trackerCount, cmpVendor };
 
   const priority: RecommendationPriority = score >= 40 ? "high" : "medium";
   const base = {
@@ -153,6 +222,8 @@ export function getCookieYesRecommendation(
     cookieConsentScore,
     showSupportCta,
     supportCtaCopy,
+    trackerCount,
+    cmpVendor,
   };
 
   // Case A — trackers detected, no consent management at all.

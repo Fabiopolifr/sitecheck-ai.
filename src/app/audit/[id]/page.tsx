@@ -122,7 +122,14 @@ export default async function AuditResultsPage({
 
         {!gated && (
           <div className="mt-10">
-            <EmailCaptureForm auditId={audit.id} source="default" />
+            <EmailCaptureForm
+              auditId={audit.id}
+              source="default"
+              showSupportOption
+              cookieConsentScore={recommendation.cookieConsentScore}
+              trackerCount={recommendation.trackerCount}
+              cmpVendor={recommendation.cmpVendor}
+            />
           </div>
         )}
 

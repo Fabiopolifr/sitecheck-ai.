@@ -13,15 +13,24 @@ export type NewLead = {
   email: string;
   firstName?: string | null;
   consentMarketing: boolean;
+  supportRequested?: boolean;
+  supportPhone?: string | null;
+  supportReason?: string | null;
 };
 
 export async function saveLead(lead: NewLead): Promise<Lead> {
+  const supportRequested = lead.supportRequested ?? false;
   const record: Lead = {
     id: randomUUID(),
     auditId: lead.auditId,
     email: lead.email,
     firstName: lead.firstName ?? null,
     consentMarketing: lead.consentMarketing,
+    supportRequested,
+    supportPhone: lead.supportPhone ?? null,
+    supportReason: lead.supportReason ?? null,
+    supportStatus: "new",
+    supportRequestedAt: supportRequested ? new Date().toISOString() : null,
     createdAt: new Date().toISOString(),
   };
 
@@ -34,14 +43,21 @@ export async function saveLead(lead: NewLead): Promise<Lead> {
 
   try {
     await pool.query(
-      `insert into leads (id, audit_id, email, first_name, consent_marketing, created_at)
-       values ($1,$2,$3,$4,$5,$6)`,
+      `insert into leads
+        (id, audit_id, email, first_name, consent_marketing, support_requested,
+         support_phone, support_reason, support_status, support_requested_at, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         record.id,
         record.auditId,
         record.email,
         record.firstName,
         record.consentMarketing,
+        record.supportRequested,
+        record.supportPhone,
+        record.supportReason,
+        record.supportStatus,
+        record.supportRequestedAt,
         record.createdAt,
       ],
     );
@@ -71,6 +87,11 @@ export async function listLeads(): Promise<Lead[]> {
       email: row.email,
       firstName: row.first_name,
       consentMarketing: row.consent_marketing,
+      supportRequested: row.support_requested,
+      supportPhone: row.support_phone,
+      supportReason: row.support_reason,
+      supportStatus: row.support_status,
+      supportRequestedAt: row.support_requested_at,
       createdAt: row.created_at,
     }));
   } catch (error) {

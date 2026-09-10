@@ -9,6 +9,7 @@ import { isRateLimited } from "@/lib/security/rateLimit";
 import { env } from "@/lib/config/env";
 import { resolvePriorities } from "@/features/audit/priorities";
 import { BAND_LABELS } from "@/features/audit/labels";
+import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
 import type { AuditResult } from "@/features/audit/types";
 
 export const runtime = "nodejs";
@@ -97,6 +98,9 @@ const requestSchema = z.object({
   sessionId: z.string().min(1).max(100).optional(),
   /** Where the lead form was shown (e.g. "default", "gate") — analytics only. */
   source: z.string().min(1).max(50).optional(),
+  /** "Vuoi che configuriamo CookieYes per te?" checkbox on the report form. */
+  supportRequested: z.boolean().optional(),
+  supportPhone: z.string().min(1).max(50).optional(),
 });
 
 function getClientKey(request: Request): string {
@@ -127,31 +131,53 @@ export async function POST(request: Request) {
     );
   }
 
-  const { auditId, email, firstName, consentMarketing, sessionId, source } =
-    parsed.data;
+  const {
+    auditId,
+    email,
+    firstName,
+    consentMarketing,
+    sessionId,
+    source,
+    supportRequested,
+    supportPhone,
+  } = parsed.data;
   const audit = await getAudit(auditId);
+  const isSetupRequest = source === "cookieyes_setup";
+  const wantsSupport = isSetupRequest || Boolean(supportRequested);
+
+  const recommendation = audit
+    ? getCookieYesRecommendation(audit.categories)
+    : null;
 
   const lead = await saveLead({
     auditId: audit ? auditId : null,
     email,
     firstName,
     consentMarketing,
+    supportRequested: wantsSupport,
+    supportPhone: wantsSupport ? (supportPhone ?? null) : null,
+    supportReason: wantsSupport ? (recommendation?.reasonCode ?? null) : null,
   });
 
   if (sessionId) {
+    const metadata =
+      source || wantsSupport
+        ? {
+            ...(source ? { source } : {}),
+            ...(wantsSupport ? { supportRequested: true } : {}),
+          }
+        : undefined;
     await saveEvent({
       sessionId,
       auditId,
       eventName: "email_submitted",
-      metadata: source ? { source } : undefined,
+      metadata,
     });
   }
 
   const emailProvider = getEmailProvider();
   const baseUrl = env.APP_URL ?? new URL(request.url).origin;
   const resultsUrl = audit ? `${baseUrl}/audit/${audit.id}` : baseUrl;
-
-  const isSetupRequest = source === "cookieyes_setup";
 
   const { subject, text, html } = isSetupRequest
     ? {
@@ -178,12 +204,38 @@ export async function POST(request: Request) {
   // A €99 assisted-setup request needs a human at Freesbe to actually
   // follow up — unlike the regular report email, there is no automated
   // fulfillment. Silently skipped (lead is still saved) when
-  // SUPPORT_NOTIFICATION_EMAIL isn't configured.
-  if (isSetupRequest && env.SUPPORT_NOTIFICATION_EMAIL) {
+  // SUPPORT_NOTIFICATION_EMAIL isn't configured. The operator should see
+  // immediately: name, phone, email, site URL, Site Score, Cookie
+  // Consent Score, detected trackers, CMP, and the recommendation reason
+  // — everything needed to call the lead without re-opening the audit.
+  if (wantsSupport && env.SUPPORT_NOTIFICATION_EMAIL) {
+    const trackerLine =
+      audit && recommendation && recommendation.trackerCount > 0
+        ? audit.categories
+            .find((c) => c.category === "tracking")
+            ?.checks.filter((c) => c.status === "warning")
+            .map((c) => c.evidence?.replace(/\s+rilevato$/, "") ?? c.id)
+            .join(", ")
+        : "nessuno rilevato";
+
+    const notifyLines = [
+      `Nome: ${firstName ?? "—"}`,
+      `Telefono: ${supportPhone ?? "—"}`,
+      `Email: ${email}`,
+      `URL sito: ${audit?.finalUrl ?? audit?.requestedUrl ?? "—"}`,
+      `Site Score: ${audit?.siteScore ?? "—"}/100`,
+      `Cookie Consent Score: ${recommendation?.cookieConsentScore ?? "—"}/100`,
+      `Tracker rilevati: ${trackerLine ?? "—"}`,
+      `CMP rilevata: ${recommendation?.cmpVendor ?? "nessuna"}`,
+      `Motivo raccomandazione: ${recommendation?.reasonCode ?? "richiesta diretta (pagina di supporto)"}`,
+      `Report: ${audit ? resultsUrl : "non disponibile"}`,
+      `Lead id: ${lead.id}`,
+    ];
+
     const notifyResult = await emailProvider.send({
       to: env.SUPPORT_NOTIFICATION_EMAIL,
       subject: "Nuova richiesta: configurazione assistita CookieYes (€99)",
-      text: `Email cliente: ${email}\nAudit: ${audit ? resultsUrl : "non disponibile"}\nLead id: ${lead.id}`,
+      text: notifyLines.join("\n"),
     });
     if (!notifyResult.ok) {
       console.error(

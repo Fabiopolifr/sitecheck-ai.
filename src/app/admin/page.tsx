@@ -77,6 +77,10 @@ export default async function AdminDashboardPage() {
             label="CTR affiliati"
             value={formatPercent(metrics.affiliateCtr)}
           />
+          <StatTile
+            label="Richieste setup CookieYes"
+            value={String(metrics.supportRequests)}
+          />
         </div>
 
         <div className="mt-10">
@@ -186,6 +190,64 @@ export default async function AdminDashboardPage() {
             Richieste di configurazione assistita (€99):{" "}
             {cookieYesFunnel.setupLeads}
           </p>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Richieste setup assistito CookieYes (€99)
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+                <tr>
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Telefono</th>
+                  <th className="px-4 py-3">Motivo</th>
+                  <th className="px-4 py-3">Stato</th>
+                  <th className="px-4 py-3">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.filter((l) => l.supportRequested).length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-zinc-400"
+                    >
+                      Nessuna richiesta ancora.
+                    </td>
+                  </tr>
+                )}
+                {leads
+                  .filter((l) => l.supportRequested)
+                  .map((lead) => (
+                    <tr key={lead.id} className="border-t border-zinc-100">
+                      <td className="px-4 py-3 text-zinc-800">
+                        {lead.firstName ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-800">{lead.email}</td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {lead.supportPhone ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {lead.supportReason ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
+                          {lead.supportStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-500">
+                        {new Date(
+                          lead.supportRequestedAt ?? lead.createdAt,
+                        ).toLocaleString("it-IT")}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">

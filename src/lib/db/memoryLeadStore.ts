@@ -1,9 +1,16 @@
+export type SupportStatus = "new" | "contacted" | "qualified" | "won" | "lost";
+
 export type Lead = {
   id: string;
   auditId: string | null;
   email: string;
   firstName: string | null;
   consentMarketing: boolean;
+  supportRequested: boolean;
+  supportPhone: string | null;
+  supportReason: string | null;
+  supportStatus: SupportStatus;
+  supportRequestedAt: string | null;
   createdAt: string;
 };
 

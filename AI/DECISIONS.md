@@ -660,3 +660,69 @@ CTA di supporto), build/lint verdi, verifica end-to-end reale (pagina di
 supporto raggiungibile con parametri `audit_id`/`reason`, card di
 raccomandazione con area €99 visibile su un audit reale contro
 `pypi.org`).
+
+### D33 — Checkbox di cattura lead "Vuoi che configuriamo CookieYes per te?" sul form report
+
+**Decisione:** su ulteriore specifica dell'owner ("COOKIEYES ASSISTED
+SETUP — LEAD CAPTURE"), il form di cattura email principale
+(`EmailCaptureForm`, mostrato sulla pagina risultati per la variante
+"open" dell'esperimento D31) espone ora un riquadro opzionale — non un
+form separato — con una checkbox "Vuoi che configuriamo CookieYes per
+te?" (copy dinamica, vedi sotto) e, se selezionata, un campo telefono
+facoltativo.
+
+- **`resolveSupportBoxCopy({cookieConsentScore, trackerCount,
+  cmpVendor})`** (nuova funzione esportata in
+  `cookieyesRecommendation.ts`) sceglie il titolo/corpo/testo checkbox in
+  ordine di priorità: CookieYes già rilevato → 3+ tracker rilevati →
+  `cookieConsentScore < 50` (tono ad alta enfasi, "priorità") →
+  `cookieConsentScore >= 80` (tono a bassa enfasi, "verifica della
+  configurazione") → copy di default MVP quando lo score non è
+  disponibile. Ogni variante dichiara esplicitamente il costo (€99 una
+  tantum) e — riquadro aggiunto in coda a ciascuna, sotto la checkbox —
+  chiarisce che l'eventuale abbonamento CookieYes stesso resta a parte,
+  sul suo account, esattamente come richiesto esplicitamente
+  dall'owner ("fai capire che cookie yes se lo fanno loro ed è a parte
+  il costo"). La stessa distinzione era già nella FAQ di
+  `/support/cookieyes-setup` (D32); qui viene resa visibile anche nel
+  punto in cui l'utente spunta la checkbox, non solo sulla pagina
+  dedicata.
+- **Schema `leads` esteso** (`migrations/0005_cookieyes_support.sql`):
+  `support_requested boolean`, `support_phone text`, `support_reason
+  text` (il `reasonCode` della raccomandazione al momento dell'invio),
+  `support_status text` con CHECK (`new`/`contacted`/`qualified`/`won`/
+  `lost`, per il follow-up manuale da admin), `support_requested_at
+  timestamptz`. **Migrazione non ancora eseguita su Neon** — va lanciata
+  prima che le richieste reali arrivino, altrimenti (comportamento di
+  fallback già descritto in D13) i lead con questi campi continuano a
+  salvarsi correttamente ma solo in memoria, non su Postgres, se
+  l'INSERT esteso fallisse per colonne mancanti.
+- **Notifica interna**: `POST /api/leads` invia (se
+  `SUPPORT_NOTIFICATION_EMAIL` è configurata, stesso meccanismo di D32)
+  un'email con Nome/Telefono/Email/URL/Site Score/Cookie Consent
+  Score/tracker rilevati/CMP/motivo — tutto ciò che serve per richiamare
+  il lead senza riaprire l'audit — sia per il checkbox sul form
+  principale sia per il form dedicato `/support/cookieyes-setup`
+  (unificati sotto `wantsSupport`, non più solo `isSetupRequest`).
+- **Admin**: nuova StatTile "Richieste setup CookieYes" e una tabella
+  dedicata (Nome/Email/Telefono/Motivo/Stato/Data) per i lead con
+  `supportRequested`, così l'operatore vede le richieste €99 senza dover
+  filtrare la lista lead generale.
+
+**Cosa è stato deliberatamente NON implementato, e perché (la seconda
+metà della stessa richiesta dell'owner, la libreria "CASE LIBRARY & 
+CONVERSION COPY" da 75 varianti di copy):** la maggior parte dei 75 casi
+sono permutazioni già coperte dall'interpolazione dinamica esistente
+(nomi di tracker reali in titolo/descrizione, già in D32); il resto
+richiede segnali che non esistono come detector nel codebase — rilevamento
+CMS/WordPress, classificazione per settore, lingua/geolocalizzazione,
+tracking comportamentale sui visitatori di ritorno, uno score di
+complessità strutturale del sito. Costruire questi detector onestamente
+(non con euristiche indovinate) è un lavoro a sé, comunicato esplicitamente
+all'owner invece di far finta di coprirlo con copy generica etichettata
+come specifica.
+
+**Verifica:** 81 test totali (5 nuovi su `resolveSupportBoxCopy`: priorità
+CookieYes-rilevato, priorità 3+ tracker sopra lo score, tono alta/bassa
+enfasi per score basso/alto, fallback MVP quando lo score è ignoto),
+build/lint verdi.

@@ -15,6 +15,8 @@ export type AdminMetrics = {
   emailCaptureRate: number | null;
   affiliateClicks: number;
   affiliateCtr: number | null;
+  /** Leads that ticked "Vuoi che configuriamo CookieYes per te?" (€99 assisted setup) — see AI/DECISIONS.md D33. */
+  supportRequests: number;
   topIssues: TopIssue[];
   topTechnologies: TopTechnology[];
   recentAudits: AuditResult[];
@@ -94,6 +96,7 @@ export function computeAdminMetrics(
     emailCaptureRate,
     affiliateClicks: affiliateClicks.length,
     affiliateCtr,
+    supportRequests: leads.filter((l) => l.supportRequested).length,
     topIssues,
     topTechnologies,
     recentAudits,
