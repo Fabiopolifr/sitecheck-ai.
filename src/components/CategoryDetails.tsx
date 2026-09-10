@@ -8,6 +8,20 @@ const STATUS_DOT_CLASS: Record<string, string> = {
   unknown: "bg-zinc-300",
 };
 
+function scoreSeverity(score: number): {
+  bar: string;
+  track: string;
+  label: string | null;
+} {
+  if (score < 40) {
+    return { bar: "bg-danger", track: "bg-danger/15", label: "Criticità" };
+  }
+  if (score < 70) {
+    return { bar: "bg-warning", track: "bg-warning/15", label: null };
+  }
+  return { bar: "bg-accent", track: "bg-zinc-100", label: null };
+}
+
 type CategoryDetailsProps = {
   category: CategoryResult;
 };
@@ -15,20 +29,31 @@ type CategoryDetailsProps = {
 export function CategoryDetails({ category }: CategoryDetailsProps) {
   const scorable = category.checks.filter((check) => check.weight > 0);
   const displayChecks = scorable.length > 0 ? scorable : category.checks;
+  const severity =
+    category.score !== null ? scoreSeverity(category.score) : null;
 
   return (
     <details className="group rounded-2xl border border-zinc-200 open:pb-2">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5">
         <div className="flex-1">
-          <h3 className="text-base font-semibold text-zinc-900">
-            {CATEGORY_LABELS[category.category]}
-          </h3>
-          {category.score !== null && (
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-zinc-900">
+              {CATEGORY_LABELS[category.category]}
+            </h3>
+            {severity?.label && (
+              <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+                {severity.label}
+              </span>
+            )}
+          </div>
+          {category.score !== null && severity && (
             <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-100">
+              <div
+                className={`h-1.5 w-32 overflow-hidden rounded-full ${severity.track}`}
+              >
                 <div
-                  className="h-full rounded-full bg-accent"
-                  style={{ width: `${category.score}%` }}
+                  className={`h-full rounded-full ${severity.bar}`}
+                  style={{ width: `${Math.max(category.score, 4)}%` }}
                 />
               </div>
               <p className="text-sm text-zinc-500">{category.score}/100</p>

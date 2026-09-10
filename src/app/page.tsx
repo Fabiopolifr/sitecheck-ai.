@@ -72,40 +72,46 @@ export default function Home() {
   return (
     <main className="flex flex-1 flex-col">
       <TrackPageView eventName="landing_view" />
-      <section className="bg-grid relative flex flex-col items-center overflow-hidden px-6 py-24 text-center sm:py-32">
-        <div className="flex items-center gap-2 rounded-full border border-accent/20 bg-accent-soft px-4 py-1.5 text-xs font-medium text-accent">
-          <CheckBadgeIcon className="h-4 w-4" />
-          Usato da agenzie immobiliari in tutta Italia
-        </div>
-        <h1 className="mt-6 max-w-2xl text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
-          Quanto è sano il sito della tua agenzia?
-        </h1>
-        <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-600">
-          Analizza in pochi secondi cookie, tracking, SEO, performance e altri
-          elementi tecnici del tuo sito.
-        </p>
-        <AuditUrlForm />
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-          {trustBadges.map((badge) => (
-            <span
-              key={badge}
-              className="flex items-center gap-1.5 text-sm text-zinc-500"
-            >
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="h-4 w-4 text-success"
-                aria-hidden
+      <section className="relative flex flex-col items-center overflow-hidden px-6 pt-14 pb-16 text-center sm:pt-20 sm:pb-20">
+        <div
+          className="bg-grid pointer-events-none absolute inset-0"
+          aria-hidden
+        />
+        <div className="relative flex flex-col items-center">
+          <div className="flex items-center gap-2 rounded-full border border-accent/20 bg-accent-soft px-4 py-1.5 text-xs font-medium text-accent">
+            <CheckBadgeIcon className="h-4 w-4" />
+            Usato da agenzie immobiliari in tutta Italia
+          </div>
+          <h1 className="mt-6 max-w-2xl text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
+            Quanto è sano il sito della tua agenzia?
+          </h1>
+          <p className="mt-4 max-w-xl text-lg leading-8 text-zinc-600">
+            Analizza in pochi secondi cookie, tracking, SEO, performance e altri
+            elementi tecnici del tuo sito.
+          </p>
+          <AuditUrlForm />
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            {trustBadges.map((badge) => (
+              <span
+                key={badge}
+                className="flex items-center gap-1.5 text-sm text-zinc-500"
               >
-                <path
-                  fillRule="evenodd"
-                  d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {badge}
-            </span>
-          ))}
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-4 w-4 text-success"
+                  aria-hidden
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 

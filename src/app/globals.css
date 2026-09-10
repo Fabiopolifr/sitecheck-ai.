@@ -27,6 +27,15 @@ body {
   color: var(--foreground);
 }
 
+/*
+ * Dot-grid decoration for the hero. Deliberately a separate absolutely
+ * positioned layer behind the content (see SiteHeader/page.tsx usage),
+ * never applied directly to an element that also holds text: an earlier
+ * version put both the pattern and the mask on the same element as the
+ * heading/copy, and `mask-image` fades the WHOLE element it's set on
+ * (not just its background) — the text faded to invisible along with
+ * the dots near the edges. Keep this rule background-only.
+ */
 .bg-grid {
   background-image: radial-gradient(circle, #e4e4e7 1px, transparent 1px);
   background-size: 28px 28px;

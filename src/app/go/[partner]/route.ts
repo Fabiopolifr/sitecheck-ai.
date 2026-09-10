@@ -23,6 +23,7 @@ export async function GET(
   const requestUrl = new URL(request.url);
   const auditId = requestUrl.searchParams.get("audit");
   const issue = requestUrl.searchParams.get("issue");
+  const placement = requestUrl.searchParams.get("placement");
   const sessionId = requestUrl.searchParams.get("session");
 
   const audit = auditId ? await getAudit(auditId) : undefined;
@@ -46,7 +47,11 @@ export async function GET(
       sessionId,
       auditId: audit ? audit.id : undefined,
       eventName: "affiliate_clicked",
-      metadata: { partner },
+      metadata: {
+        partner,
+        ...(issue ? { reasonCode: issue } : {}),
+        ...(placement ? { placement } : {}),
+      },
     });
   }
 

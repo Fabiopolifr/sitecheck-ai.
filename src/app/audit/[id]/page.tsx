@@ -5,40 +5,19 @@ import { getSummary } from "@/lib/db/summariesRepository";
 import { CategoryDetails } from "@/components/CategoryDetails";
 import { EmailCaptureForm } from "@/components/EmailCaptureForm";
 import { GatedContent } from "@/components/GatedContent";
-import { AffiliateCta } from "@/components/AffiliateCta";
+import { AffiliateRecommendation } from "@/components/AffiliateRecommendation";
 import { TrackPageView } from "@/components/TrackPageView";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { BAND_LABELS, BAND_COLORS } from "@/features/audit/labels";
 import { isGatedVariant } from "@/features/audit/abTest";
-import type { AuditResult, Check } from "@/features/audit/types";
+import { resolvePriorities } from "@/features/audit/priorities";
+import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
 
 const SEVERITY_DOT: Record<"high" | "medium" | "low", string> = {
   high: "bg-danger",
   medium: "bg-warning",
   low: "bg-zinc-300",
 };
-
-function cookieConsentNeedsAttention(audit: AuditResult): boolean {
-  const cookieConsent = audit.categories.find(
-    (c) => c.category === "cookie_consent",
-  );
-  return (
-    cookieConsent?.checks.some(
-      (check) => check.status === "fail" || check.status === "warning",
-    ) ?? false
-  );
-}
-
-function topPriorities(checks: Check[], limit: number): Check[] {
-  return checks
-    .filter((c) => c.status === "fail" || c.status === "warning")
-    .sort((a, b) => {
-      const severity = (c: Check) => (c.status === "fail" ? 1 : 0);
-      if (severity(b) !== severity(a)) return severity(b) - severity(a);
-      return b.weight * b.confidence - a.weight * a.confidence;
-    })
-    .slice(0, limit);
-}
 
 export default async function AuditResultsPage({
   params,
@@ -75,17 +54,10 @@ export default async function AuditResultsPage({
 
   const summary = await getSummary(audit.id);
   const allChecks = audit.categories.flatMap((c) => c.checks);
-  const fallbackPriorities = topPriorities(allChecks, 3).map((check) => ({
-    title: check.id,
-    reason: check.evidence ?? "elemento da verificare",
-    severity: (check.status === "fail" ? "high" : "medium") as
-      "high" | "medium",
-  }));
-  const priorities = summary?.top_priorities.length
-    ? summary.top_priorities
-    : fallbackPriorities;
+  const priorities = resolvePriorities(allChecks, summary);
   const bandColors = audit.band ? BAND_COLORS[audit.band] : null;
   const gated = isGatedVariant(audit.id);
+  const recommendation = getCookieYesRecommendation(audit.categories);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
@@ -154,9 +126,14 @@ export default async function AuditResultsPage({
           </div>
         )}
 
-        {cookieConsentNeedsAttention(audit) && (
+        {recommendation.showRecommendation && (
           <div className="mt-6">
-            <AffiliateCta auditId={audit.id} partner="cookieyes" />
+            <AffiliateRecommendation
+              auditId={audit.id}
+              partner="cookieyes"
+              placement="results_top"
+              {...recommendation}
+            />
           </div>
         )}
 
