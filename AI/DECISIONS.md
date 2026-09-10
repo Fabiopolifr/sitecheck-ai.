@@ -909,3 +909,59 @@ essere usato direttamente al posto di `LogomarkIcon`/`favicon.ico`/
 reale (`next start` locale): header renderizza "Free**Cookie**be" con
 "Cookie" in arancione brand, footer "FreeCookieBe", `/icon.svg` servito
 correttamente con i colori `#c8863f`/`#10213c`.
+
+### D36 — Bug di deploy Hostinger trovato: Passenger non riavvia da solo dopo un upload; esperimento gate email messo in pausa
+
+**Cosa è successo:** dopo aver caricato lo ZIP col rebrand, il sito
+mostrava ancora la vecchia grafica "SiteCheck AI" con CSS completamente
+assente (font di default, icone SVG enormi non vincolate da classi
+Tailwind). Diagnosticato passo passo insieme all'owner tramite il file
+manager di hPanel (nessun accesso diretto a Hostinger disponibile in
+questa sessione — dominio fuori dall'allowlist del proxy egress,
+coerente con D12/D21/D30): build corretta su disco
+(`hbuilds/.../nodejs/.next/static/css/*.css` conteneva già i colori del
+nuovo brand), server Node avviato senza errori fatali (`console.log`:
+"Ready in 0ms", solo warning innocui su `COOKIEYES_AFFILIATE_URL` e SSL
+mode di `pg`, entrambi già gestiti a runtime). L'hosting usa **Phusion
+Passenger** (non un semplice reverse proxy a una porta, vedi
+`.htaccess`: `PassengerAppRoot`/`PassengerAppType node`), che tiene un
+processo Node già avviato in memoria tra un deploy e l'altro e
+**non lo riavvia automaticamente** quando arrivano file nuovi — serve
+aggiornare la data di modifica di `hbuilds/current/nodejs/tmp/restart.txt`
+perché Passenger lo noti e forzi un riavvio. Il file esisteva già (creato
+dal processo di deploy) ma con timestamp vecchio; il vero processo Node
+in esecuzione continuava a servire l'HTML della build precedente, che
+puntava a nomi di file CSS ormai sovrascritti dalla build nuova → 404.
+
+**Fix (operativo, non di codice):** cancellare e ricreare
+`hbuilds/current/nodejs/tmp/restart.txt` (vuoto) dopo ogni upload di un
+nuovo ZIP forza Passenger a scartare il processo vecchio e avviarne uno
+nuovo che legge i file appena caricati. Verificato end-to-end: dopo il
+touch del file, il sito ha iniziato a servire correttamente CSS, header
+brandizzato "FreeCookieBe", card CookieYes con CTA di supporto — tutto
+il lavoro di questa sessione, non solo il rebrand.
+
+**Questo è un passo mancante nella procedura di deploy che va ripetuto
+a ogni upload futuro** — non è stato ancora automatizzato (Hostinger
+Cloud Startup non dà accesso SSH per uno script di deploy, solo il
+pannello file manager e "Deploy Web App"). Andrebbe aggiunto come
+promemoria esplicito ogni volta che si consegna un nuovo ZIP all'owner.
+
+**Esperimento A/B "gate email" (D31) messo in pausa:** una volta risolto
+il problema del CSS, l'owner ha notato che il dettaglio per categoria
+mancava su un audit reale — non un bug, ma la variante "gated"
+dell'esperimento che era capitata su quell'audit specifico. Con
+traffico ancora molto basso uno split 50/50 non produce un confronto
+statisticamente significativo e nel frattempo nasconde il report a metà
+dei visitatori senza un motivo di prodotto valido in questa fase.
+`isGatedVariant()` (`src/features/audit/abTest.ts`) è stata
+temporaneamente forzata a restituire sempre `false` (tutti vedono la
+variante aperta), lasciando l'infrastruttura dell'esperimento intatta
+(GatedContent, metadata `abVariant` sugli eventi, `computeAbTestMetrics`
+in admin) — riattivarlo in futuro richiede solo di ripristinare la
+logica di hash sul corpo della funzione, non ricostruire nulla.
+
+**Verifica:** 94 test totali (rimosso il test statistico sullo split
+50/50, non più applicabile con l'esperimento in pausa; aggiunto un test
+che verifica il ritorno costante a `false`), build/lint verdi,
+verifica end-to-end reale sul sito in produzione dopo il fix Passenger.

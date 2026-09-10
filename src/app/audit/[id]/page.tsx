@@ -59,7 +59,7 @@ export default async function AuditResultsPage({
   const allChecks = audit.categories.flatMap((c) => c.checks);
   const priorities = resolvePriorities(allChecks, summary);
   const bandColors = audit.band ? BAND_COLORS[audit.band] : null;
-  const gated = isGatedVariant(audit.id);
+  const gated = isGatedVariant();
   const recommendation = getCookieYesRecommendation(audit.categories);
   const freesbe = getFreesbeRecommendation(audit.categories);
   const comboDiagnosis = resolveComboDiagnosis(audit.categories);

@@ -3,6 +3,35 @@
 Guida per portare SiteCheck AI in produzione. Vedi `AI/ARCHITECTURE.md`
 per i dettagli implementativi di ogni componente citato qui.
 
+## Setup di produzione effettivo: Hostinger Cloud Startup (ZIP) + Neon
+
+Il resto di questo documento descrive l'opzione VPS (app + Postgres
+entrambi self-hosted), ma il deploy reale in uso è diverso, deciso più
+avanti nel progetto (vedi `AI/DECISIONS.md`): **Hostinger Cloud
+Startup**, che non dà accesso SSH/root, solo un pannello "Deploy Web
+App" con upload ZIP (esegue `npm install && npm run build` lato
+server via Phusion Passenger), più **Neon** come Postgres gestito
+esterno (`DATABASE_URL` puntato lì).
+
+**Passo che va ripetuto a ogni upload di un nuovo ZIP, non solo la
+prima volta:** Passenger tiene un processo Node già avviato in memoria
+e **non lo riavvia da solo** quando arrivano file nuovi — il sito
+continua a servire la build precedente (CSS/JS compresi) finché non
+gli si dice esplicitamente di ricaricare. Dopo ogni upload:
+
+1. Nel file manager di hPanel, vai in
+   `hbuilds/current/nodejs/tmp/`.
+2. Elimina il file `restart.txt` se esiste già, poi ricrealo vuoto
+   (New file → `restart.txt`).
+3. Aspetta una decina di secondi, poi ricarica il sito con un refresh
+   forzato (Ctrl+Shift+R) per verificare.
+
+Saltare questo passo è la causa più probabile se dopo un upload il
+sito continua a mostrare la grafica/i contenuti vecchi, o mostra CSS
+completamente assente (link a un file che la build nuova ha già
+sovrascritto con un altro nome) — vedi `AI/DECISIONS.md` D36 per il
+caso reale che ha portato a scoprirlo.
+
 ## Requisiti dell'hosting
 
 L'app è un progetto Next.js 16 standard (App Router). Non richiede nulla
