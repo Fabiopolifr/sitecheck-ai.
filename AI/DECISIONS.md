@@ -1069,3 +1069,84 @@ reale in questa sessione (nessuna `GOOGLE_PLACES_API_KEY`/credenziali
 di produzione disponibili qui) — stesso principio di trasparenza di
 D12/D21/D30: il percorso "nessuna chiave configurata" (coda manuale
 soltanto) è l'unico verificato realmente.
+
+### D38 — Posizionamento generico ("azienda", non solo agenzie immobiliari) + esposizione normativa (matrice sanzionatoria GDPR)
+
+**Decisione:** su richiesta esplicita dell'owner, due cambi distinti:
+
+1. **Copy generalizzata**: tutte le stringhe rivolte all'utente che
+   parlavano esplicitamente di "agenzia"/"agenzie immobiliari"
+   (homepage, `layout.tsx`, content engine, system prompt AI) sono state
+   generalizzate ad "azienda"/"sito aziendale" — coerente con la
+   decisione già presa in D37 di non limitare più lo scraping/outreach
+   alle sole agenzie immobiliari. Il posizionamento originale del
+   prodotto (`AI/MASTER_SPEC.md`) restava per agenzie immobiliari; questo
+   allarga il pubblico dichiarato senza toccare la logica di audit, che
+   era già generica.
+
+2. **`src/features/audit/regulatoryExposure.ts`** (nuovo,
+   `resolveRegulatoryExposure`): sulla pagina risultati, oltre al Site
+   Score, viene mostrata un'"esposizione normativa" su 4 livelli per
+   Cookie & Consent e Privacy — 🟢 Conforme, 🟡 Attenzione, 🟠 Rischio
+   elevato, 🔴 Criticità normativa — con riferimenti agli articoli GDPR/
+   D.Lgs. 196/2003 coinvolti e, per i livelli 🟠/🔴, il massimo edittale
+   previsto (art. 83, par. 5 GDPR: fino a €20.000.000 o il 4% del
+   fatturato mondiale annuo, richiamato per i cookie anche dall'art. 166
+   comma 2 del Codice Privacy che include l'art. 122).
+
+   Regole di framing seguite **esattamente come richiesto dall'owner**,
+   per evitare l'errore di credibilità di mostrare "rischi una multa da
+   20 milioni" per un piccolo sito con un pixel configurato male:
+   - **Mai una somma di violazioni.** Quando sia Cookie & Consent sia
+     Privacy hanno un critical cap (D34) attivo, viene mostrato solo il
+     finding più grave (stesso criterio già usato da `criticalCaps.ts`
+     per scegliere il tetto più stringente) — mai "€20M + €20M".
+   - **Sempre "massimo edittale previsto", mai una previsione di
+     sanzione.** Ogni volta che compare una cifra, è accompagnata dalla
+     frase esplicita che l'importo reale è deciso dal Garante in base
+     alle circostanze concrete (gravità, durata, numero di interessati,
+     misure correttive, precedenti) — non una previsione di quanto
+     l'azienda "rischia realmente".
+   - **Il livello 🔴 scatta solo quando un critical cap è realmente
+     scattato** (D34: nessun CMP con tracker attivi, nessun CMP,
+     informativa privacy assente) — non per un punteggio semplicemente
+     basso, che genera invece 🟠 "Rischio elevato" con un framing meno
+     assertivo.
+   - **Cifre aggiornate al regime GDPR + art. 166 Codice Privacy**, non
+     alle vecchie soglie italiane pre-GDPR (€6.000-36.000 ecc.,
+     esplicitamente abrogate) citate dall'owner come errore da evitare.
+
+   Component `RegulatoryExposureCard.tsx`, renderizzato sulla pagina
+   risultati subito dopo le priorità principali, prima del form email.
+
+**Cosa NON è stato implementato, e perché (il resto della spec
+dell'owner):**
+- **Nessuna "libreria di casi" con 20+ combinazioni di finding
+  pre-scritte una per una.** La spec elenca decine di combinazioni
+  specifiche (es. "Meta Pixel prima del consenso" come voce a sé
+  rispetto a "Google Ads prima del consenso"); questo codebase ha un
+  numero limitato di critical cap realmente rilevabili (D34) — la
+  mappa `CRITICAL_FINDING_COPY` copre le 3 esistenti
+  (`cookie_cmp_absent_trackers_active`, `cookie_cmp_absent`,
+  `privacy_policy_absent`); estenderla a voci che il codice non
+  distingue ancora (es. Meta Pixel specificamente vs. Google Ads
+  specificamente come finding *critical* separati, oggi entrambi
+  ricadono nello stesso reasonCode) richiederebbe nuovi detector, non
+  solo nuovo testo.
+- **Nessun collegamento con l'art. 25 (privacy by design, €10M/2%) o con
+  i poteri correttivi dell'art. 58** (ammonimento, pubblicazione del
+  provvedimento) citati dall'owner con l'esempio del caso Milia S.r.l.
+  — non esiste nel codebase un segnale che distingua "il sito ha
+  corretto rapidamente" da "non lo ha fatto", che è ciò che nella realtà
+  sposta il Garante da una sanzione a un ammonimento; mostrarlo come
+  possibilità generica senza un segnale concreto dietro sarebbe stato
+  meno onesto del semplice non implementarlo.
+
+**Verifica:** 112 test totali (6 nuovi:
+`tests/regulatoryExposure.test.ts` — critica su cap singolo, critica
+con selezione del finding più grave quando entrambe le categorie sono
+cappate, rischio elevato, attenzione, conforme, null quando nessuna
+categoria rilevante è presente), build/lint verdi, verifica end-to-end
+reale contro `pypi.org`: Cookie & Consent 0/100 + Privacy 64/100 →
+"🟠 Rischio elevato" mostrato correttamente con il testo del massimo
+edittale.

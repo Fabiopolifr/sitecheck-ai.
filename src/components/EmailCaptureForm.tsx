@@ -123,7 +123,7 @@ export function EmailCaptureForm({
           <input
             type="email"
             required
-            placeholder="nome@agenzia.it"
+            placeholder="nome@azienda.it"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             disabled={status === "loading"}

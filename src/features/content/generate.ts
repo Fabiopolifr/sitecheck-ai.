@@ -15,7 +15,7 @@ function buildInsightPost(insight: NewContentInsight): NewContentPost {
     sourceType: "insight",
     sourceReference: null, // set by the caller once the insight row is saved
     headline: "Cosa emerge dai siti che abbiamo analizzato",
-    body: `Su ${insight.sampleSize} siti di agenzie immobiliari analizzati con FreeCookieBe, il ${value.rate}% presenta un elemento da verificare nella gestione di cookie e consenso.`,
+    body: `Su ${insight.sampleSize} siti aziendali analizzati con FreeCookieBe, il ${value.rate}% presenta un elemento da verificare nella gestione di cookie e consenso.`,
     cta: "Controlla il tuo sito gratis",
     imageUrl: null,
   };

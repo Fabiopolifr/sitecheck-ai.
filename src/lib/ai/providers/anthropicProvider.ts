@@ -3,7 +3,7 @@ import { env } from "@/lib/config/env";
 import { auditSummarySchema } from "../schema";
 import type { AIProvider, AuditSummary, AuditSummaryInput } from "../types";
 
-const SYSTEM_PROMPT = `Sei un assistente che spiega risultati di audit tecnici di siti web per agenzie immobiliari italiane.
+const SYSTEM_PROMPT = `Sei un assistente che spiega risultati di audit tecnici di siti web aziendali italiani.
 Ricevi un JSON con il Site Score e un elenco di check con stato (pass/warning/fail/unknown).
 Rispondi SOLO con un oggetto JSON valido, senza testo aggiuntivo, in questo formato esatto:
 {"summary": "...", "top_priorities": [{"title": "...", "reason": "...", "severity": "high"|"medium"|"low"}]}

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FreeCookieBe — Analisi tecnica del tuo sito",
   description:
-    "Analizza in pochi secondi cookie, tracking, SEO, performance e altri elementi tecnici del sito della tua agenzia.",
+    "Analizza in pochi secondi cookie, tracking, SEO, performance e altri elementi tecnici del sito della tua azienda.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -13,6 +13,8 @@ import { BAND_LABELS, BAND_COLORS } from "@/features/audit/labels";
 import { isGatedVariant } from "@/features/audit/abTest";
 import { resolvePriorities } from "@/features/audit/priorities";
 import { resolveComboDiagnosis } from "@/features/audit/comboDiagnosis";
+import { resolveRegulatoryExposure } from "@/features/audit/regulatoryExposure";
+import { RegulatoryExposureCard } from "@/components/RegulatoryExposureCard";
 import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
 import { getFreesbeRecommendation } from "@/features/affiliate/freesbeRecommendation";
 
@@ -63,6 +65,7 @@ export default async function AuditResultsPage({
   const recommendation = getCookieYesRecommendation(audit.categories);
   const freesbe = getFreesbeRecommendation(audit.categories);
   const comboDiagnosis = resolveComboDiagnosis(audit.categories);
+  const regulatoryExposure = resolveRegulatoryExposure(audit.categories);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-16">
@@ -136,6 +139,12 @@ export default async function AuditResultsPage({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {regulatoryExposure && (
+          <div className="mt-6">
+            <RegulatoryExposureCard {...regulatoryExposure} />
           </div>
         )}
 

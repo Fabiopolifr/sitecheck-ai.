@@ -15,8 +15,8 @@ export type EvergreenTemplate = {
 const EVERGREEN_LIBRARY: Record<ContentType, EvergreenTemplate[]> = {
   data_insight: [
     {
-      headline: "Il sito della tua agenzia è tracciabile?",
-      body: "Molti siti di agenzie immobiliari installano strumenti di tracciamento (Google Analytics, Meta Pixel) senza una gestione del consenso chiaramente visibile. Vale la pena una verifica rapida.",
+      headline: "Il sito della tua azienda è tracciabile?",
+      body: "Molti siti aziendali installano strumenti di tracciamento (Google Analytics, Meta Pixel) senza una gestione del consenso chiaramente visibile. Vale la pena una verifica rapida.",
       cta: "Controlla il tuo sito gratis",
     },
   ],
@@ -27,9 +27,8 @@ const EVERGREEN_LIBRARY: Record<ContentType, EvergreenTemplate[]> = {
       cta: null,
     },
     {
-      headline:
-        "Perché il tempo di caricamento conta per un'agenzia immobiliare",
-      body: "Un potenziale cliente che aspetta più di qualche secondo per vedere gli annunci abbandona la pagina. La performance del sito è anche una questione di conversioni, non solo di tecnica.",
+      headline: "Perché il tempo di caricamento conta per un sito aziendale",
+      body: "Un potenziale cliente che aspetta più di qualche secondo per vedere la pagina la abbandona. La performance del sito è anche una questione di conversioni, non solo di tecnica.",
       cta: null,
     },
   ],
@@ -56,7 +55,7 @@ const EVERGREEN_LIBRARY: Record<ContentType, EvergreenTemplate[]> = {
   ],
   conversion_cta: [
     {
-      headline: "Quanto è sano il sito della tua agenzia?",
+      headline: "Quanto è sano il sito della tua azienda?",
       body: "Analisi tecnica gratuita in pochi secondi: cookie, privacy, tracking, SEO e performance. Nessuna registrazione richiesta.",
       cta: "Analizza gratis",
     },

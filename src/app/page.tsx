@@ -48,7 +48,7 @@ const steps = [
   {
     number: 1,
     title: "Inserisci il sito",
-    description: "Incolla l'indirizzo dell'agenzia, senza installare nulla.",
+    description: "Incolla l'indirizzo del sito, senza installare nulla.",
   },
   {
     number: 2,
@@ -80,10 +80,10 @@ export default function Home() {
         <div className="relative flex flex-col items-center">
           <div className="flex items-center gap-2 rounded-full border border-accent/20 bg-accent-soft px-4 py-1.5 text-xs font-medium text-accent">
             <CheckBadgeIcon className="h-4 w-4" />
-            Usato da agenzie immobiliari in tutta Italia
+            Usato da aziende in tutta Italia
           </div>
           <h1 className="mt-6 max-w-2xl text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
-            Quanto è sano il sito della tua agenzia?
+            Quanto è sano il sito della tua azienda?
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-8 text-zinc-600">
             Analizza in pochi secondi cookie, tracking, SEO, performance e altri
