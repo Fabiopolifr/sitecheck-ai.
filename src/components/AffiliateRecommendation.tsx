@@ -30,6 +30,11 @@ function buildHref(
   return `/go/${encodeURIComponent(partner)}?${params.toString()}`;
 }
 
+function buildSupportHref(auditId: string, reasonCode: string) {
+  const params = new URLSearchParams({ audit_id: auditId, reason: reasonCode });
+  return `/support/cookieyes-setup?${params.toString()}`;
+}
+
 const CARD_CLASS: Record<RecommendationPriority, string> = {
   high: "rounded-2xl border border-accent/30 bg-accent-soft px-6 py-6",
   medium: "rounded-2xl border border-accent/20 bg-accent-soft/60 px-6 py-5",
@@ -47,6 +52,8 @@ export function AffiliateRecommendation({
   description,
   benefits,
   ctaLabel,
+  showSupportCta,
+  supportCtaCopy,
 }: AffiliateRecommendationProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
 
@@ -122,6 +129,17 @@ export function AffiliateRecommendation({
       >
         {ctaLabel}
       </a>
+      {!compact && showSupportCta && (
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white px-4 py-3">
+          <p className="text-xs text-zinc-600">{supportCtaCopy}</p>
+          <a
+            href={buildSupportHref(auditId, reasonCode)}
+            className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline"
+          >
+            Configurazione assistita — €99 una tantum →
+          </a>
+        </div>
+      )}
       {!compact && (
         <p className="mt-3 text-xs text-zinc-400">
           Link affiliato: se scegli CookieYes tramite questo report, SiteCheck

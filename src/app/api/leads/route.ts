@@ -151,7 +151,15 @@ export async function POST(request: Request) {
   const baseUrl = env.APP_URL ?? new URL(request.url).origin;
   const resultsUrl = audit ? `${baseUrl}/audit/${audit.id}` : baseUrl;
 
-  const { subject, text, html } = await buildReportEmail(audit, resultsUrl);
+  const isSetupRequest = source === "cookieyes_setup";
+
+  const { subject, text, html } = isSetupRequest
+    ? {
+        subject: "Richiesta ricevuta — Configurazione assistita CookieYes",
+        text: "Grazie per la richiesta di configurazione assistita di CookieYes (€99 una tantum). Ti ricontatteremo a breve per i dettagli.",
+        html: "<p>Grazie per la richiesta di configurazione assistita di CookieYes (€99 una tantum). Ti ricontatteremo a breve per i dettagli.</p>",
+      }
+    : await buildReportEmail(audit, resultsUrl);
 
   const emailResult = await emailProvider.send({
     to: email,
@@ -165,6 +173,24 @@ export async function POST(request: Request) {
     // lead — but it needs to be visible server-side, since the client
     // only sees a generic success ("we've sent it") once the lead exists.
     console.error("Failed to send lead email via provider:", emailResult.error);
+  }
+
+  // A €99 assisted-setup request needs a human at Freesbe to actually
+  // follow up — unlike the regular report email, there is no automated
+  // fulfillment. Silently skipped (lead is still saved) when
+  // SUPPORT_NOTIFICATION_EMAIL isn't configured.
+  if (isSetupRequest && env.SUPPORT_NOTIFICATION_EMAIL) {
+    const notifyResult = await emailProvider.send({
+      to: env.SUPPORT_NOTIFICATION_EMAIL,
+      subject: "Nuova richiesta: configurazione assistita CookieYes (€99)",
+      text: `Email cliente: ${email}\nAudit: ${audit ? resultsUrl : "non disponibile"}\nLead id: ${lead.id}`,
+    });
+    if (!notifyResult.ok) {
+      console.error(
+        "Failed to send internal setup-request notification:",
+        notifyResult.error,
+      );
+    }
   }
 
   return NextResponse.json({ id: lead.id }, { status: 201 });

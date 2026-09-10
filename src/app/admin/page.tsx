@@ -7,6 +7,7 @@ import {
   computeAdminMetrics,
   computeFunnelMetrics,
   computeAbTestMetrics,
+  computeCookieYesFunnelMetrics,
 } from "@/features/admin/metrics";
 import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
@@ -32,6 +33,7 @@ export default async function AdminDashboardPage() {
   const metrics = computeAdminMetrics(audits, leads, affiliateClicks);
   const funnel = computeFunnelMetrics(events);
   const abTest = computeAbTestMetrics(events);
+  const cookieYesFunnel = computeCookieYesFunnelMetrics(events);
 
   return (
     <main className="flex flex-1 flex-col px-6 py-12">
@@ -141,6 +143,48 @@ export default async function AdminDashboardPage() {
             Split 50/50 deterministico per audit (AI/DECISIONS.md D31). Con
             campioni piccoli le percentuali sono poco affidabili: aspetta almeno
             qualche decina di visite per variante prima di trarre conclusioni.
+          </p>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            CookieYes — click per motivo di raccomandazione
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+                <tr>
+                  <th className="px-4 py-3">Reason code</th>
+                  <th className="px-4 py-3">Click</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cookieYesFunnel.byReason.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={2}
+                      className="px-4 py-6 text-center text-zinc-400"
+                    >
+                      Nessun click ancora.
+                    </td>
+                  </tr>
+                )}
+                {cookieYesFunnel.byReason.map((row) => (
+                  <tr key={row.reasonCode} className="border-t border-zinc-100">
+                    <td className="px-4 py-3 text-zinc-800">
+                      {row.reasonCode}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-zinc-900">
+                      {row.clicks}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-zinc-400">
+            Richieste di configurazione assistita (€99):{" "}
+            {cookieYesFunnel.setupLeads}
           </p>
         </div>
 

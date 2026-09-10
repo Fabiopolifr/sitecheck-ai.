@@ -154,4 +154,103 @@ describe("getCookieYesRecommendation", () => {
     );
     expect(Object.keys(rec)).not.toContain("score");
   });
+
+  it("names the actual detected trackers in the copy instead of a generic phrase", () => {
+    const rec = getCookieYesRecommendation(
+      categories([
+        check({
+          id: "cmp_detected",
+          category: "cookie_consent",
+          status: "fail",
+          value: null,
+        }),
+        check({
+          id: "tracking_meta_pixel",
+          category: "tracking",
+          status: "warning",
+          evidence: "Meta Pixel rilevato",
+        }),
+      ]),
+    );
+    expect(rec.title).toContain("Meta Pixel");
+    expect(rec.description).toContain("Meta Pixel");
+  });
+
+  it("exposes cookieConsentScore and a positive relevanceScore for the admin funnel", () => {
+    const rec = getCookieYesRecommendation([
+      {
+        category: "cookie_consent",
+        score: 0,
+        checks: [
+          check({
+            id: "cmp_detected",
+            category: "cookie_consent",
+            status: "fail",
+            value: null,
+          }),
+        ],
+      },
+      {
+        category: "tracking",
+        score: null,
+        checks: [
+          check({
+            id: "tracking_google_analytics",
+            category: "tracking",
+            status: "warning",
+          }),
+        ],
+      },
+    ]);
+    expect(rec.cookieConsentScore).toBe(0);
+    expect(rec.relevanceScore).toBeGreaterThan(0);
+  });
+
+  it("shows the assisted-setup CTA when cookieConsentScore is low", () => {
+    const rec = getCookieYesRecommendation([
+      {
+        category: "cookie_consent",
+        score: 40,
+        checks: [
+          check({
+            id: "cmp_detected",
+            category: "cookie_consent",
+            status: "fail",
+            value: null,
+          }),
+        ],
+      },
+    ]);
+    expect(rec.showSupportCta).toBe(true);
+    expect(rec.supportCtaCopy.length).toBeGreaterThan(0);
+  });
+
+  it("does not show the assisted-setup CTA for a single tracker with a healthy consent score", () => {
+    const rec = getCookieYesRecommendation([
+      {
+        category: "cookie_consent",
+        score: 85,
+        checks: [
+          check({
+            id: "cmp_detected",
+            category: "cookie_consent",
+            status: "warning",
+            value: "generic_banner",
+          }),
+        ],
+      },
+      {
+        category: "tracking",
+        score: null,
+        checks: [
+          check({
+            id: "tracking_google_analytics",
+            category: "tracking",
+            status: "warning",
+          }),
+        ],
+      },
+    ]);
+    expect(rec.showSupportCta).toBe(false);
+  });
 });

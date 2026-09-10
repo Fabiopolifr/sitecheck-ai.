@@ -155,6 +155,49 @@ export function computeAbTestMetrics(events: AnalyticsEvent[]): AbTestMetrics {
   return { gated: build("gated"), open: build("open") };
 }
 
+export type CookieYesReasonBreakdown = {
+  reasonCode: string;
+  clicks: number;
+};
+
+export type CookieYesFunnelMetrics = {
+  byReason: CookieYesReasonBreakdown[];
+  setupLeads: number;
+};
+
+/**
+ * Which audit findings (reasonCode) actually drive CookieYes clicks, and
+ * how many visitors asked for the €99 assisted setup — see
+ * AI/DECISIONS.md (CookieYes conversion engine). Reuses the
+ * affiliate_clicked/email_submitted metadata already recorded, no new
+ * event types or schema.
+ */
+export function computeCookieYesFunnelMetrics(
+  events: AnalyticsEvent[],
+): CookieYesFunnelMetrics {
+  const counts = new Map<string, number>();
+  for (const e of events) {
+    if (e.eventName !== "affiliate_clicked") continue;
+    const reasonCode =
+      typeof e.metadata?.reasonCode === "string"
+        ? e.metadata.reasonCode
+        : "unknown";
+    counts.set(reasonCode, (counts.get(reasonCode) ?? 0) + 1);
+  }
+
+  const byReason = [...counts.entries()]
+    .map(([reasonCode, clicks]) => ({ reasonCode, clicks }))
+    .sort((a, b) => b.clicks - a.clicks);
+
+  const setupLeads = events.filter(
+    (e) =>
+      e.eventName === "email_submitted" &&
+      e.metadata?.source === "cookieyes_setup",
+  ).length;
+
+  return { byReason, setupLeads };
+}
+
 /**
  * Conversion funnel per AI/MASTER_SPEC.md §33, computed from
  * `analytics_events` rather than the domain tables (audits/leads/

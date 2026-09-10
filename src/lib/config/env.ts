@@ -18,6 +18,9 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
 
+  /** Internal inbox notified when a visitor requests the €99 CookieYes assisted setup — see AI/DECISIONS.md. */
+  SUPPORT_NOTIFICATION_EMAIL: z.string().email().optional(),
+
   APP_URL: z.string().url().optional(),
 
   CONTENT_GENERATION_SECRET: z.string().min(16).optional(),

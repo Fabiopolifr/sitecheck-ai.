@@ -582,3 +582,81 @@ reale via Resend richiede `EMAIL_PROVIDER=resend`, `EMAIL_API_KEY`,
 `EMAIL_FROM` configurate; senza, `mockEmailProvider` logga soltanto il
 messaggio in console (comportamento invariato, vedi D_originale su
 persistenza con fallback).
+
+### D32 — CookieYes conversion engine: copy dinamica, cookieConsentScore, servizio assistito €99
+
+**Decisione:** su specifica dettagliata dell'owner (18 sezioni), il
+motore di raccomandazione CookieYes (`src/features/affiliate/
+cookieyesRecommendation.ts`, D27/D31) è stato esteso con:
+
+- **Copy dinamica specifica**: titolo e descrizione ora citano i nomi
+  reali dei tracker rilevati (es. "Meta Pixel rilevato", "Il sito
+  utilizza GA4, Meta Pixel e Google Tag Manager") invece di un testo
+  generico, riusando il campo `evidence` già scritto dal detector invece
+  di duplicare una seconda mappa di etichette.
+- **`cookieConsentScore`** esposto nel risultato (score della categoria
+  `cookie_consent`, già calcolato da `scoring.ts` — nessuna nuova
+  logica di punteggio) e **`relevanceScore`** (il punteggio interno di
+  pertinenza commerciale, 0-100+, usato solo per calcolare `priority` e
+  mai per influenzare il Site Score).
+- **CTA secondaria "Configurazione assistita — €99 una tantum"**
+  (`showSupportCta`/`supportCtaCopy`), mostrata quando
+  `cookieConsentScore <= 60` o quando sono stati rilevati 2+ tracker;
+  copy diversa in base alla complessità (numero di tracker rilevati).
+- **`/support/cookieyes-setup`**: pagina con cosa include, come
+  funziona, tempi, FAQ, e un form di richiesta che riusa
+  `EmailCaptureForm` con `source="cookieyes_setup"` — nessun componente
+  nuovo per la cattura lead, solo un nuovo `source` sul meccanismo già
+  esistente.
+- **Dashboard admin**: nuova sezione "click per motivo di
+  raccomandazione" (`computeCookieYesFunnelMetrics`, raggruppa
+  `affiliate_clicked` per `metadata.reasonCode` già registrato) e conteggio
+  delle richieste di setup — risponde direttamente all'obiettivo
+  dell'owner "capire quale finding genera più revenue" senza nuove
+  tabelle né nuovi tipi di evento.
+
+**Cosa è stato deliberatamente NON implementato, e perché:**
+
+- **Nessuna raccolta pagamenti reale (Stripe).** La spec dell'owner
+  descrive esplicitamente l'MVP come "richiesta di interesse" (contact
+  form/email), con Stripe come passo futuro esplicitamente rimandato
+  ("architecture so Stripe checkout can be added later"). Il form di
+  `/support/cookieyes-setup` salva quindi solo un lead e — se
+  `SUPPORT_NOTIFICATION_EMAIL` è configurata — invia una notifica interna
+  a Freesbe; il follow-up (contatto, pagamento, esecuzione del lavoro)
+  resta un processo umano, non automatizzato. **Va impostata
+  `SUPPORT_NOTIFICATION_EMAIL` su Hostinger perché le richieste arrivino
+  davvero a qualcuno**, altrimenti restano visibili solo come lead nel
+  database/admin.
+- **Nessun rilevamento CMS/WordPress né "complexity score" strutturale.**
+  La spec li cita come criteri per la CTA di supporto (§10); non esiste
+  nel codebase alcun detector CMS. Costruirne uno è un lavoro a sé
+  (richiede pattern-matching su generator meta tag, percorsi tipici
+  WP/Shopify/Wix, ecc.) — l'eleggibilità della CTA di supporto usa quindi
+  solo `cookieConsentScore` e numero di tracker rilevati, un sottoinsieme
+  ragionevole ma non completo dei criteri elencati.
+- **Nessun nuovo tipo di evento analytics** (`cookieyes_recommendation_view`,
+  `cookieyes_support_view`, ecc. dalla sezione 14 della spec). La tabella
+  `analytics_events` ha un vincolo CHECK sul nome evento (migrazione
+  0003) che richiederebbe un'ALTER TABLE per estendere l'elenco; si è
+  preferito riusare gli eventi/metadata già esistenti
+  (`affiliate_clicked.metadata.reasonCode`,
+  `email_submitted.metadata.source`), che coprono comunque l'obiettivo
+  di business dichiarato (capire quali finding convertono), a costo di
+  una granularità leggermente minore (non si distingue "vista card" da
+  "click", solo il click).
+- **Nessuna riscrittura dei toni per fascia di Site Score** (§2 della
+  spec: messaggi OTTIMO/BUONO/DA MIGLIORARE/PRIORITÀ ALTA con subcopy
+  dedicata). La pagina risultati mostra già banda e colore semantico
+  (D30/gauge); aggiungere anche il subcopy testuale per fascia è
+  rimandato a un secondo giro per restare nello scope di una singola
+  sessione già ampia — non è un problema tecnico, solo una scelta di
+  sequenziamento.
+
+**Verifica:** 76 test totali (10 nuovi su
+`tests/cookieyesRecommendation.test.ts`: specificità della copy,
+esposizione di `cookieConsentScore`/`relevanceScore`, eleggibilità della
+CTA di supporto), build/lint verdi, verifica end-to-end reale (pagina di
+supporto raggiungibile con parametri `audit_id`/`reason`, card di
+raccomandazione con area €99 visibile su un audit reale contro
+`pypi.org`).
