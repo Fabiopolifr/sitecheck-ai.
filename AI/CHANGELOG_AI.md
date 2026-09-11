@@ -520,3 +520,12 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     cartelle di versione e lanciarlo da dentro `current/nodejs` poteva
     dare un errore di cwd cancellata
   - 26 nuovi test, 176 totali; lint e build (webpack) verdi
+
+- 2026-09-11 — Body malformato del trigger outreach (D54):
+  - `POST /api/outreach/run` distingue body assente (default, legittimo)
+    da body presente ma non parsabile (400 con la forma corretta nel
+    messaggio). Prima un JSON rotto veniva scartato in silenzio e si
+    applicavano i default: 30 siti al giorno invece dei 5 configurati
+  - trovato su una configurazione reale del cronjob con due oggetti JSON
+    incollati
+  - 5 nuovi test, 181 totali

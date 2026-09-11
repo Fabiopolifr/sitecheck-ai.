@@ -36,11 +36,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Un body assente è legittimo (alcuni scheduler non ne inviano) e
+  // vale come "usa i valori predefiniti". Un body *presente ma
+  // malformato* invece no: accettarlo in silenzio significherebbe
+  // applicare i default, cioè inviare PIÙ email di quante l'owner ne
+  // aveva configurate, senza che nulla lo segnali. Meglio far fallire
+  // la chiamata, così l'errore è visibile nello storico del cronjob
+  // (AI/DECISIONS.md D54).
+  const raw = (await request.text()).trim();
   let body: unknown = {};
-  try {
-    body = await request.json();
-  } catch {
-    // Empty body is fine — falls back to defaults.
+
+  if (raw.length > 0) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Body JSON non valido. Deve essere un unico oggetto, es. " +
+            '{"manualPerDay": 5, "discoveryQueries": ["..."]}',
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const parsed = requestSchema.safeParse(body);

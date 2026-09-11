@@ -16,13 +16,17 @@ import { POST } from "@/app/api/outreach/run/route";
 import { setOutreachPaused } from "@/features/outreach/pause";
 
 function request(body: unknown = {}, secret = "test-secret") {
+  return rawRequest(JSON.stringify(body), secret);
+}
+
+function rawRequest(body: string, secret = "test-secret") {
   return new Request("https://example.test/api/outreach/run", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-outreach-secret": secret,
     },
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -74,6 +78,60 @@ describe("POST /api/outreach/run — pause flag", () => {
   it("rejects an unauthorized caller regardless of pause state", async () => {
     const response = await POST(request({}, "wrong-secret"));
     expect(response.status).toBe(401);
+    expect(runOutreachBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/outreach/run — request body", () => {
+  beforeEach(async () => {
+    runOutreachBatch.mockReset();
+    runOutreachBatch.mockResolvedValue({
+      manualProcessed: 0,
+      discovered: 0,
+      analyzed: 0,
+      eligible: 0,
+      emailed: 0,
+      followedUp: 0,
+      errors: 0,
+    });
+    await setOutreachPaused(false);
+  });
+
+  it("treats an absent body as 'use the defaults'", async () => {
+    const response = await POST(rawRequest(""));
+    expect(response.status).toBe(200);
+    expect(runOutreachBatch).toHaveBeenCalledWith({});
+  });
+
+  it("passes the configured caps through", async () => {
+    await POST(request({ manualPerDay: 5, discoveryPerDay: 3 }));
+    expect(runOutreachBatch).toHaveBeenCalledWith({
+      manualPerDay: 5,
+      discoveryPerDay: 3,
+    });
+  });
+
+  it("refuses two JSON objects glued together instead of silently using the defaults", async () => {
+    // Il caso reale: due oggetti incollati nel body del cronjob. Prima
+    // veniva scartato in silenzio e si applicavano i default, cioè 30
+    // siti al giorno invece dei 5 configurati.
+    const response = await POST(
+      rawRequest('{"discoveryQueries": ["x"]}{"manualPerDay": 5}'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(runOutreachBatch).not.toHaveBeenCalled();
+  });
+
+  it("refuses malformed JSON", async () => {
+    const response = await POST(rawRequest("{manualPerDay: 5"));
+    expect(response.status).toBe(400);
+    expect(runOutreachBatch).not.toHaveBeenCalled();
+  });
+
+  it("refuses out-of-range values", async () => {
+    const response = await POST(request({ manualPerDay: 500 }));
+    expect(response.status).toBe(400);
     expect(runOutreachBatch).not.toHaveBeenCalled();
   });
 });

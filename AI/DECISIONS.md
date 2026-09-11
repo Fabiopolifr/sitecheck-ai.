@@ -2095,3 +2095,37 @@ cui viene lanciato. Il pannello Hostinger ruota le cartelle sotto
 ("Unable to read current working directory") che non ha nulla a che
 vedere col deploy: lo script fa ora `cd "$HOME"` subito dopo aver
 individuato Node.
+
+### D54 — Un body malformato deve far fallire il trigger, non applicare i default
+
+**Caso reale:** configurando il cronjob, l'owner ha incollato nel body
+due oggetti JSON attaccati:
+
+```
+{"discoveryQueries": [...]}{"manualPerDay": 5}
+```
+
+Non è JSON valido. La route faceva `try { await request.json() } catch
+{}` e in caso di errore lasciava `body = {}`, applicando i valori
+predefiniti: **30 siti al giorno invece dei 5 configurati**, e zero
+discovery. Cioè l'esatto opposto dell'intenzione — sei volte il volume
+di email su un dominio senza storia di invio — senza un solo segnale.
+
+**Decisione:** il body viene letto come testo e si distinguono due casi.
+Assente o composto di soli spazi: legittimo, vale "usa i default"
+(alcuni scheduler non inviano corpo). Presente ma non parsabile: **400**,
+con un messaggio che mostra la forma corretta. L'errore diventa così
+visibile nello storico del cronjob invece di tradursi in più email.
+
+**Principio generale:** quando un input malformato porta a un
+comportamento *più aggressivo* del previsto (più invii, più spesa, più
+accessi), il fallback silenzioso è la scelta sbagliata a prescindere da
+quanto sia comodo. Un default va applicato quando l'input manca, non
+quando è sbagliato: nel secondo caso qualcuno ha espresso un'intenzione
+che non siamo in grado di rispettare, e deve saperlo.
+
+**Verifica:** 5 nuovi test in `tests/outreachRunRoute.test.ts`, incluso
+il body reale con i due oggetti incollati che ora restituisce 400 senza
+eseguire il batch, il body assente che continua a valere come default,
+i parametri che arrivano davvero a `runOutreachBatch`, e i valori fuori
+intervallo respinti. 181 test totali.
