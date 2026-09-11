@@ -1784,3 +1784,67 @@ nel backup — cioè completamente giù, nel momento in cui l'utente pensa
 solo di aver annullato un comando. Il trap è ora su `ERR INT TERM`.
 Verificato inviando `SIGINT` a build in corso: ripristinati sia `.next`
 sia `node_modules`.
+
+### D50 — `workerThreads: true` e `cpus: 1`: la build moriva per il tetto di processi dell'hosting condiviso
+
+**Sintomo:** dopo aver risolto D49, la build sul server superava
+compilazione e type check (`✓ Compiled successfully`,
+`✓ Finished TypeScript`) e poi moriva con:
+
+```
+uncaughtException Error: spawn /opt/alt/alt-nodejs24/root/usr/bin/node EAGAIN
+  syscall: 'spawn ...'
+  spawnargs: [ '.../next/dist/compiled/jest-worker/processChild.js' ]
+```
+
+**Causa:** `EAGAIN` su `spawn` non è un problema di memoria (il server
+ne riportava 280 GB liberi) ma il rifiuto del sistema di creare nuovi
+processi. La generazione delle pagine statiche di Next gira su
+jest-worker, che per default usa **processi figli**, uno per CPU vista
+sulla macchina — su un host condiviso significa molti processi contro un
+tetto per utente (LVE/CloudLinux) che il sito in produzione sta già
+occupando in parte. Nota: la build dal pannello Hostinger riesce
+probabilmente perché avviene senza l'app in esecuzione a consumare
+slot.
+
+**Decisione:** in `next.config.js`
+
+```js
+experimental: { workerThreads: true, cpus: 1 }
+```
+
+**Perché `workerThreads` risolve alla radice** (verificato nel codice di
+`next/dist/compiled/jest-worker`, non dedotto):
+
+```js
+if (this._options.enableWorkerThreads && canUseWorkerThreads()) {
+  t = ExperimentalWorker;   // new Worker() da worker_threads
+} else {
+  t = ChildProcessWorker;   // child_process.fork()  <- l'EAGAIN
+}
+```
+
+Con i thread non si crea nessun processo, quindi il limite non viene
+nemmeno sfiorato. `cpus: 1` riduce inoltre il parallelismo a un solo
+worker, tenendo basso il consumo complessivo.
+
+**Costo:** trascurabile. Il sito ha ~20 pagine e la generazione statica
+dura meno di un secondo; la build locale passa da ~14s a ~20s.
+
+**Perché non è condizionato a una variabile d'ambiente:** una config
+diversa fra sviluppo e produzione significa non testare davvero ciò che
+va in produzione. Meglio una sola configurazione, conservativa,
+verificata in entrambi gli ambienti.
+
+**Verifica:** build locale completata con `✓ workerThreads` attivo e
+"Generating static pages using 1 worker", tutte le 21 route generate
+correttamente; `npm run lint` e `npm run test` (150/150) verdi. La
+verifica sul server resta da fare al prossimo deploy — è l'ambiente in
+cui il difetto si manifesta e l'unico dove si può confermare.
+
+**Nota sui `⚠ GLIBC_2.29 not found`:** compaiono a ogni build sul server
+e **non sono** un errore: il binario nativo di SWC richiede una glibc
+più recente di quella dell'host, e Next ripiega sulle binding WASM. È la
+stessa ragione per cui il progetto usa `next build --webpack` invece di
+Turbopack. Conseguenza pratica da conoscere: la build sul server è
+sensibilmente più lenta che in locale.

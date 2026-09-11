@@ -458,3 +458,15 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     dall'app root
   - riverificati in simulazione entrambi i percorsi, riproducendo il
     guasto reale di produzione (react-dom mutilato + stamp bugiardo)
+
+- 2026-09-11 — La build sul server moriva per il tetto di processi (D50):
+  - `next.config.js`: `experimental.workerThreads: true` e `cpus: 1`
+  - la generazione delle pagine statiche usava processi figli (uno per
+    CPU della macchina) e sull'hosting condiviso sbatteva contro il
+    limite di processi per utente: `spawn ... EAGAIN`, dopo una
+    compilazione e un type check andati a buon fine
+  - verificato nel codice di jest-worker che con `enableWorkerThreads`
+    si usa `worker_threads` invece di `child_process.fork`, quindi il
+    limite non viene nemmeno sfiorato
+  - build locale verde con "using 1 worker" e 21 route generate;
+    lint e 150/150 test verdi
