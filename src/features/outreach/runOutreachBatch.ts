@@ -13,6 +13,7 @@ import {
 import { searchBusinesses } from "@/lib/leadDiscovery/googlePlaces";
 import { extractContactEmail } from "./extractContactEmail";
 import { evaluateOutreachEligibility } from "./eligibility";
+import { evaluateDomainExclusion } from "./exclusions";
 import {
   composeOutreachEmail,
   composeOutreachFollowUpEmail,
@@ -61,6 +62,18 @@ async function processSite(site: OutreachSite): Promise<void> {
 
   if (await isOutreachSuppressed(null, site.domain)) {
     site.status = "suppressed";
+    site.analyzedAt = new Date().toISOString();
+    await updateOutreachSite(site);
+    return;
+  }
+
+  // Checked before the audit runs: no point spending a fetch on a
+  // franchise/portal domain we would never email anyway (D43).
+  const domainExclusion = evaluateDomainExclusion(site.domain);
+  if (domainExclusion.excluded) {
+    site.status = "ineligible";
+    site.eligible = false;
+    site.eligibilityReason = domainExclusion.reason;
     site.analyzedAt = new Date().toISOString();
     await updateOutreachSite(site);
     return;

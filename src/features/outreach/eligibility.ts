@@ -1,4 +1,5 @@
 import type { AuditResult } from "@/features/audit/types";
+import { detectExistingCmp, evaluateDomainExclusion } from "./exclusions";
 
 export type EligibilityResult = {
   eligible: boolean;
@@ -10,10 +11,27 @@ export type EligibilityResult = {
  * overall Site Score — is broken enough to justify a cold outreach email
  * (AI/DECISIONS.md D37). Deliberately narrower than "is this site bad":
  * a site with poor SEO but a solid CMP is not what this outreach is for.
+ *
+ * Two exclusions are checked before any finding (D43): big franchise /
+ * portal domains, and sites already running a real CMP. Both are cases
+ * where the email would land badly regardless of what the audit found.
  */
 export function evaluateOutreachEligibility(
   audit: AuditResult,
 ): EligibilityResult {
+  const domainExclusion = evaluateDomainExclusion(audit.hostname);
+  if (domainExclusion.excluded) {
+    return { eligible: false, reason: domainExclusion.reason! };
+  }
+
+  const existingCmp = detectExistingCmp(audit);
+  if (existingCmp) {
+    return {
+      eligible: false,
+      reason: `Usa già una piattaforma di consenso (${existingCmp})`,
+    };
+  }
+
   const cookieConsent = audit.categories.find(
     (c) => c.category === "cookie_consent",
   );

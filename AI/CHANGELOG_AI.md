@@ -357,3 +357,32 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     su compose email), 126 test totali
   - verificati: `npm run lint`, `npm run test` (126/126), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Filtri di esclusione, anteprima email, verifica della
+  pausa e documentazione delle migration (D43, D44):
+  - `src/features/outreach/exclusions.ts`: esclude dall'outreach i
+    domini dei grandi franchising/reti (Tecnocasa, Gabetti, RE/MAX,
+    Grimaldi, Toscano, Century 21, Capital House, FRIMM…), i portali
+    (Immobiliare.it, Casa.it, Idealista, Subito) e le associazioni di
+    categoria; match sulle label del dominio senza TLD, quindi prende
+    anche i sottodomini locali (`milano.tecnocasa.it`) senza falsi
+    positivi sulle agenzie indipendenti (`immobiliarerossi.it`)
+  - esclude anche i siti che usano già una CMP reale (Iubenda,
+    CookieYes, OneTrust, Cookiebot…), leggendo il check `cmp_detected`
+    già prodotto dai detector esistenti; il banner generico non
+    identificato resta invece contattabile
+  - il filtro sul dominio gira **prima** dell'audit, così non si spreca
+    una fetch su un sito che non verrebbe comunque contattato
+  - nuova pagina `/admin/outreach/anteprima`: rende tutte le varianti
+    di email (primo contatto + follow-up) con dati di esempio, usando
+    gli stessi compositori dell'invio reale — così non può divergere da
+    ciò che parte davvero
+  - `tests/outreachRunRoute.test.ts`: verifica sul comportamento reale
+    della route che a pausa attiva il batch non venga mai eseguito
+  - `migrations/RUN_ALL.sql`: tutte le migration in un unico file
+    idempotente da incollare nel SQL Editor di Neon, con query di
+    verifica finale; `DEPLOYMENT.md` ha ora una sezione che spiega come
+    si eseguono le migration e qual è il sintomo tipico quando mancano
+  - 16 nuovi test, 142 test totali
+  - verificati: `npm run lint`, `npm run test` (142/142), `npm run build`
+    (webpack, tutti verdi)

@@ -120,9 +120,17 @@ export default async function AdminOutreachPage({
         </div>
 
         <div className="mt-8">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            Test oggetto email
-          </h2>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-sm font-semibold text-zinc-900">
+              Test oggetto email
+            </h2>
+            <Link
+              href="/admin/outreach/anteprima"
+              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900"
+            >
+              Anteprima email
+            </Link>
+          </div>
           <p className="mt-1 text-xs text-zinc-500">
             Ogni sito riceve deterministicamente una delle varianti di oggetto
             qui sotto (email di primo contatto e, se serve, un follow-up dopo

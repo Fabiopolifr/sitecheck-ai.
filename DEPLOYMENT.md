@@ -32,6 +32,42 @@ completamente assente (link a un file che la build nuova ha già
 sovrascritto con un altro nome) — vedi `AI/DECISIONS.md` D36 per il
 caso reale che ha portato a scoprirlo.
 
+## Migration del database (Neon) — come si eseguono
+
+Non c'è nessuno strumento automatico di migration in questo progetto
+(niente Prisma/Drizzle): le migration sono file `.sql` in `migrations/`
+che vanno eseguiti **a mano** sul database Neon. Non vengono eseguite
+dal deploy: caricare uno ZIP nuovo NON aggiorna lo schema del database.
+
+**Procedura (5 minuti, si fa dal browser):**
+
+1. Vai su [console.neon.tech](https://console.neon.tech) e apri il tuo
+   progetto.
+2. Nel menu a sinistra clicca **SQL Editor**.
+3. Apri il file `migrations/RUN_ALL.sql` di questo repository, copia
+   **tutto** il contenuto e incollalo nell'editor.
+4. Clicca **Run**.
+5. In fondo al file c'è una query di verifica: deve restituire 10
+   righe (i nomi delle tabelle). Se le vedi tutte, è fatto.
+
+`RUN_ALL.sql` contiene tutte le migration da `0001` a oggi, in ordine.
+**È sicuro eseguirlo più volte** e anche se parte delle tabelle esiste
+già: ogni istruzione usa `if not exists`, quindi salta ciò che c'è e
+non tocca i dati esistenti. Questo è il motivo per cui non serve
+tenere traccia di "quali migration ho già fatto": in caso di dubbio,
+riesegui `RUN_ALL.sql` e sei allineato.
+
+Quando viene aggiunta una migration nuova va aggiunta in coda anche a
+`RUN_ALL.sql`, e va rieseguita la procedura qui sopra prima (o subito
+dopo) il deploy dello ZIP che la richiede.
+
+**Sintomo tipico di una migration mancante:** la funzionalità sembra
+funzionare ma i dati "non si salvano" / spariscono dopo qualche ora.
+Il codice ha un fallback in memoria per ogni repository (vedi
+`AI/DECISIONS.md` D13/D21): se la tabella non esiste, la scrittura su
+Postgres fallisce, viene loggata in `console.log` e il dato resta solo
+nella memoria del processo Node — che Passenger prima o poi riavvia.
+
 ## Requisiti dell'hosting
 
 L'app è un progetto Next.js 16 standard (App Router). Non richiede nulla

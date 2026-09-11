@@ -1368,3 +1368,102 @@ eseguita su Neon prima del deploy (aggiunge `email_variant`,
 finiscono nel fallback in-memory. Non verificabile end-to-end contro il
 sito reale da questa sessione (stesso limite di rete — D12/D21/D30/D37/
 D40/D41).
+
+### D43 — Filtri di esclusione dell'outreach: franchising, portali e siti che usano già una CMP
+
+**Decisione:** prima di qualunque valutazione sui rilievi dell'audit, un
+sito viene escluso dall'outreach in due casi:
+
+1. **Dominio di un grande franchising o di un portale** (`exclusions.ts`,
+   `evaluateDomainExclusion`): Tecnocasa, Gabetti, RE/MAX, Grimaldi,
+   Toscano, Century 21, Professionecasa, Tempocasa, Capital House, FRIMM
+   e simili, più i portali (Immobiliare.it, Casa.it, Idealista, Subito) e
+   le associazioni di categoria (FIMAA, FIAIP). Il controllo avviene
+   **prima** di lanciare l'audit, così non si spreca nemmeno una fetch.
+2. **Sito che usa già una Consent Management Platform reale**
+   (`detectExistingCmp`): Iubenda, CookieYes, OneTrust, Cookiebot,
+   Complianz, Didomi, Usercentrics ecc., leggendo il valore del check
+   `cmp_detected` già prodotto dal detector esistente
+   (`detectors/signals.ts`), senza nuova logica di rilevamento.
+
+**Motivazione (parole dell'owner):** "se trovi una e-mail che ha come
+dominio tecnocasa o un grande franchising ignorala, perché di per sé il
+sito sarà istituzionale quindi non ha senso contattarlo perderemmo solo
+di credibilità" e "se usano iubenda evita di contattarlo, se usano già
+cookieyes evita di contattarlo". Sono entrambi casi in cui l'email
+arriva a qualcuno che non può agire (sede centrale del franchising) o
+che ha già comprato una soluzione al problema che stiamo segnalando: in
+entrambi i casi il messaggio legge come "non hanno nemmeno guardato il
+sito" e brucia credibilità invece di costruirla.
+
+**Dettagli di implementazione che contano:**
+
+- Il match sul brand avviene **sulle label del dominio senza il TLD**,
+  quindi `tecnocasa.it` e `milano.tecnocasa.it` sono esclusi mentre un
+  ipotetico `casatecnologia.it` no.
+- I brand troppo generici (`casa`, `immobiliare`, `idealista`,
+  `subito`) NON sono usati come match per sottostringa — spazzerebbero
+  via mezza lista di agenzie indipendenti (`immobiliarerossi.it`) — ma
+  solo come match esatto del dominio. C'è un test dedicato a questo
+  falso positivo.
+- Il caso "banner generico non identificato" (`generic_banner`)
+  **non** esclude: spesso è un banner fatto in casa che fallisce
+  davvero i controlli, ed è esattamente il profilo da contattare.
+- L'esclusione per CMP vive in `evaluateOutreachEligibility`, quindi
+  vale anche per i siti scoperti via Google Maps, non solo per la coda
+  manuale. Quella per dominio è duplicata (pre-audit in
+  `processSite` + dentro `evaluateOutreachEligibility` su
+  `audit.hostname`) di proposito: la seconda intercetta il caso in cui
+  un dominio locale rediriga su quello del franchising.
+
+**Cosa NON è stato implementato e perché:** la lista dei brand è
+hardcodata e non editabile dal pannello admin. Un editor CRUD per una
+lista che cambia forse due volte l'anno è complessità sproporzionata;
+aggiungere un nome è una riga in `EXCLUDED_BRANDS`. Se un domani la
+lista dovesse cambiare spesso, la sede naturale è `app_settings` (D41).
+
+**Verifica:** `npm run lint`, `npm run test` (142/142, inclusi i 13
+nuovi test in `tests/outreachExclusions.test.ts` che coprono
+franchising, sottodomini, portali, falsi positivi e CMP già presenti),
+`npm run build` (webpack) tutti verdi.
+
+### D44 — Anteprima delle email in admin e verifica della pausa
+
+**Decisione:** aggiunta la pagina `/admin/outreach/anteprima` che rende
+le email di outreach (primo contatto e follow-up, tutte le varianti di
+oggetto) con dati di esempio, esattamente come le vedrà il
+destinatario. La pagina chiama gli stessi `composeOutreachEmail` /
+`composeOutreachFollowUpEmail` usati dall'invio reale: non è una copia
+statica del testo, quindi non può divergere da ciò che parte davvero.
+
+**Motivazione:** l'owner non aveva modo di vedere cosa stesse
+effettivamente inviando il sistema a suo nome se non aspettando di
+riceverne una. Per uno strumento che manda email automatiche a nome
+dell'azienda, "vedere cosa esce" è un requisito di controllo, non una
+comodità.
+
+**Sicurezza:** la pagina usa `dangerouslySetInnerHTML` per rendere
+l'HTML dell'email. È sicuro qui e solo qui perché l'input è una
+costante hardcodata nel file e ogni valore interpolato passa già da
+`escapeHtml` in `composeEmail.ts`; non va esteso ad anteprime di email
+costruite su dati di siti reali senza sanitizzazione. La pagina è
+comunque dietro l'auth admin (il matcher del proxy copre
+`/admin/...` tranne `/admin/login`).
+
+**Verifica della pausa (D41), su richiesta esplicita dell'owner
+"controlla se la pausa è vera":** aggiunto
+`tests/outreachRunRoute.test.ts`, che esercita la route reale
+`POST /api/outreach/run` con `runOutreachBatch` mockato e verifica che
+(a) a pausa disattiva il batch parte, (b) a pausa attiva il batch **non
+viene mai chiamato** e la risposta è `{paused: true}`, (c) dopo la
+riattivazione riparte, (d) un chiamante non autorizzato viene respinto
+a prescindere dallo stato di pausa. La pausa è quindi verificata a
+livello di comportamento, non solo di lettura del flag.
+
+**Limite noto della pausa, da conoscere:** finché la migration
+`0007_app_settings.sql` non è eseguita su Neon, il flag vive solo nella
+memoria del processo Node (fallback in-memory, D13/D21). Passenger può
+riavviare il processo — e in quel caso l'automazione si riattiva da
+sola senza preavviso. Eseguita la migration, il flag è persistente e
+condiviso. Questo è il motivo per cui in `DEPLOYMENT.md` è stata
+aggiunta una sezione dedicata a come si eseguono le migration.
