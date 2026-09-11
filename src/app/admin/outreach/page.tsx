@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { listOutreachSites } from "@/lib/db/outreachRepository";
+import { listLeads } from "@/lib/db/leadsRepository";
 import { StatTile } from "@/components/StatTile";
 import { OutreachQueueForm } from "@/components/OutreachQueueForm";
 import { AdminNav } from "@/components/AdminNav";
 import { OutreachPauseToggle } from "@/components/OutreachPauseToggle";
 import { isOutreachPaused } from "@/features/outreach/pause";
+import { computeOutreachVariantStats } from "@/features/outreach/metrics";
 import type { OutreachStatus } from "@/features/outreach/types";
 
 export const dynamic = "force-dynamic";
@@ -31,16 +33,24 @@ const STATUS_BADGE: Record<OutreachStatus, string> = {
 
 type EligibleFilter = "all" | "eligible" | "ineligible";
 
+function formatPercent(value: number | null): string {
+  if (value === null) return "—";
+  return `${Math.round(value * 100)}%`;
+}
+
 export default async function AdminOutreachPage({
   searchParams,
 }: {
   searchParams: Promise<{ eligible?: string; status?: string }>;
 }) {
   const { eligible: eligibleParam, status: statusParam } = await searchParams;
-  const [sites, paused] = await Promise.all([
+  const [sites, leads, paused] = await Promise.all([
     listOutreachSites(),
+    listLeads(),
     isOutreachPaused(),
   ]);
+
+  const variantStats = computeOutreachVariantStats(sites, leads);
 
   const eligibleFilter: EligibleFilter =
     eligibleParam === "eligible" || eligibleParam === "ineligible"
@@ -84,16 +94,16 @@ export default async function AdminOutreachPage({
         </div>
         <div className="mt-2 flex items-center justify-between gap-4">
           <p className="text-sm text-zinc-500">
-            Analisi giornaliera di siti (coda manuale + scoperta Google
-            Maps), filtro per idoneità privacy/cookie, invio email
-            automatico ai siti idonei.
+            Analisi giornaliera di siti (coda manuale + scoperta Google Maps),
+            filtro per idoneità privacy/cookie, invio email automatico ai siti
+            idonei.
           </p>
           <OutreachPauseToggle initialPaused={paused} />
         </div>
         {paused && (
           <p className="mt-3 rounded-lg bg-warning/10 px-4 py-2 text-sm text-warning">
-            Automazione in pausa: il prossimo trigger dal cronjob non
-            analizzerà né invierà email finché non riattivi.
+            Automazione in pausa: il prossimo trigger dal cronjob non analizzerà
+            né invierà email finché non riattivi.
           </p>
         )}
 
@@ -107,6 +117,78 @@ export default async function AdminOutreachPage({
 
         <div className="mt-8">
           <OutreachQueueForm />
+        </div>
+
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-zinc-900">
+            Test oggetto email
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Ogni sito riceve deterministicamente una delle varianti di oggetto
+            qui sotto (email di primo contatto e, se serve, un follow-up dopo
+            qualche giorno). Il tasso di conversione conta un lead registrato
+            sul report di quell&apos;audit.
+          </p>
+
+          {(
+            [
+              { title: "Primo contatto", data: variantStats.initial },
+              { title: "Follow-up", data: variantStats.followUp },
+            ] as const
+          ).map(({ title, data }) => (
+            <div key={title} className="mt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                {title}
+              </h3>
+              {data.length === 0 ? (
+                <p className="mt-2 text-xs text-zinc-400">
+                  Nessuna email di questo tipo inviata finora.
+                </p>
+              ) : (
+                <div className="mt-2 overflow-x-auto rounded-2xl border border-zinc-200">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 bg-zinc-50/60 text-xs uppercase tracking-wide text-zinc-500">
+                        <th className="px-4 py-2">Variante</th>
+                        <th className="px-4 py-2">Inviate</th>
+                        <th className="px-4 py-2">Click</th>
+                        <th className="px-4 py-2">Tasso click</th>
+                        <th className="px-4 py-2">Conversioni</th>
+                        <th className="px-4 py-2">Tasso conversione</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.map((row) => (
+                        <tr
+                          key={row.variant}
+                          className="border-b border-zinc-100 last:border-0"
+                        >
+                          <td className="px-4 py-2 font-medium text-zinc-900">
+                            {row.variant}
+                          </td>
+                          <td className="px-4 py-2 text-zinc-600">
+                            {row.sent}
+                          </td>
+                          <td className="px-4 py-2 text-zinc-600">
+                            {row.clicked}
+                          </td>
+                          <td className="px-4 py-2 text-zinc-600">
+                            {formatPercent(row.clickRate)}
+                          </td>
+                          <td className="px-4 py-2 text-zinc-600">
+                            {row.converted}
+                          </td>
+                          <td className="px-4 py-2 font-medium text-success">
+                            {formatPercent(row.conversionRate)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         <div className="mt-8 flex flex-wrap items-center gap-2">
@@ -154,6 +236,7 @@ export default async function AdminOutreachPage({
                 <th className="px-4 py-3">Motivo</th>
                 <th className="px-4 py-3">Email contatto</th>
                 <th className="px-4 py-3">Stato</th>
+                <th className="px-4 py-3">Follow-up</th>
                 <th className="px-4 py-3">Data</th>
               </tr>
             </thead>
@@ -185,6 +268,11 @@ export default async function AdminOutreachPage({
                       {STATUS_LABELS[site.status]}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">
+                    {site.followUpSentAt
+                      ? `Inviato (${site.followUpVariant})`
+                      : "—"}
+                  </td>
                   <td className="px-4 py-3 text-xs text-zinc-400">
                     {new Date(site.createdAt).toLocaleDateString("it-IT")}
                   </td>
@@ -193,7 +281,7 @@ export default async function AdminOutreachPage({
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-6 text-center text-sm text-zinc-400"
                   >
                     Nessun sito trovato con questo filtro.

@@ -28,6 +28,10 @@ export function findOutreachSiteByDomain(domain: string): OutreachSite | null {
   return sites.find((s) => s.domain === domain) ?? null;
 }
 
+export function findOutreachSiteById(id: string): OutreachSite | null {
+  return sites.find((s) => s.id === id) ?? null;
+}
+
 export function saveOutreachSuppression(
   suppression: OutreachSuppression,
 ): void {

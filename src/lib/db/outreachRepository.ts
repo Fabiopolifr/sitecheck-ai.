@@ -4,6 +4,7 @@ import {
   saveOutreachSite as saveMemorySite,
   listOutreachSites as listMemorySites,
   findOutreachSiteByDomain as findMemorySiteByDomain,
+  findOutreachSiteById as findMemorySiteById,
   saveOutreachSuppression as saveMemorySuppression,
   listOutreachSuppressions as listMemorySuppressions,
   isSuppressed as isMemorySuppressed,
@@ -35,6 +36,12 @@ function rowToSite(row: Record<string, unknown>): OutreachSite {
       ? (row.analyzed_at as Date).toISOString()
       : null,
     emailedAt: row.emailed_at ? (row.emailed_at as Date).toISOString() : null,
+    emailVariant: (row.email_variant as string) ?? null,
+    clickedAt: row.clicked_at ? (row.clicked_at as Date).toISOString() : null,
+    followUpSentAt: row.follow_up_sent_at
+      ? (row.follow_up_sent_at as Date).toISOString()
+      : null,
+    followUpVariant: (row.follow_up_variant as string) ?? null,
   };
 }
 
@@ -59,6 +66,10 @@ export async function createOutreachSite(
     createdAt: new Date().toISOString(),
     analyzedAt: null,
     emailedAt: null,
+    emailVariant: null,
+    clickedAt: null,
+    followUpSentAt: null,
+    followUpVariant: null,
   };
 
   if (!isDatabaseConfigured()) {
@@ -105,7 +116,9 @@ export async function updateOutreachSite(site: OutreachSite): Promise<void> {
       `update outreach_sites set
         business_name = $2, audit_id = $3, site_score = $4, band = $5,
         contact_email = $6, eligible = $7, eligibility_reason = $8,
-        status = $9, analyzed_at = $10, emailed_at = $11
+        status = $9, analyzed_at = $10, emailed_at = $11,
+        email_variant = $12, clicked_at = $13, follow_up_sent_at = $14,
+        follow_up_variant = $15
        where id = $1`,
       [
         site.id,
@@ -119,6 +132,10 @@ export async function updateOutreachSite(site: OutreachSite): Promise<void> {
         site.status,
         site.analyzedAt,
         site.emailedAt,
+        site.emailVariant,
+        site.clickedAt,
+        site.followUpSentAt,
+        site.followUpVariant,
       ],
     );
   } catch (error) {
@@ -161,6 +178,26 @@ export async function findOutreachSiteByDomain(
   } catch (error) {
     console.error("Failed to look up outreach site in Postgres:", error);
     return findMemorySiteByDomain(domain);
+  }
+}
+
+export async function getOutreachSiteById(
+  id: string,
+): Promise<OutreachSite | null> {
+  if (!isDatabaseConfigured()) {
+    return findMemorySiteById(id);
+  }
+
+  const pool = getPool()!;
+  try {
+    const result = await pool.query(
+      `select * from outreach_sites where id = $1 limit 1`,
+      [id],
+    );
+    return result.rows.length > 0 ? rowToSite(result.rows[0]) : null;
+  } catch (error) {
+    console.error("Failed to look up outreach site by id in Postgres:", error);
+    return findMemorySiteById(id);
   }
 }
 

@@ -27,6 +27,10 @@ export type OutreachSite = {
   createdAt: string;
   analyzedAt: string | null;
   emailedAt: string | null;
+  emailVariant: string | null;
+  clickedAt: string | null;
+  followUpSentAt: string | null;
+  followUpVariant: string | null;
 };
 
 export type NewOutreachSite = {

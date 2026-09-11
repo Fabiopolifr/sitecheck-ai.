@@ -11,6 +11,7 @@ const requestSchema = z.object({
   discoveryQueries: z.array(z.string().min(1)).max(20).optional(),
   manualPerDay: z.number().int().min(0).max(100).optional(),
   discoveryPerDay: z.number().int().min(0).max(50).optional(),
+  followUpPerDay: z.number().int().min(0).max(100).optional(),
 });
 
 function isAuthorized(request: Request): boolean {

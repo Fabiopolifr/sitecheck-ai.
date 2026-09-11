@@ -1293,3 +1293,78 @@ limite di rete di sempre — vedi D12/D21/D30/D37/D40); la migration
 precedenti prima che il flag funzioni in produzione con persistenza
 reale (userà comunque il fallback in-memory anche senza, ma il valore
 non sopravvive a un riavvio del processo Node su Hostinger).
+
+### D42 — Test A/B sull'oggetto email + sequenza di follow-up (e perché NON facciamo "cloni" del sito)
+
+**Contesto — cosa è stato chiesto e cosa è stato rifiutato:** l'owner ha
+proposto di creare 5 "cloni" del prodotto (brand, dominio, mittente e
+grafica diversi) per contattare **le stesse aziende** più volte con la
+stessa proposta, in modo che "se non si registra da uno si registra
+dall'altro". Non è stato implementato, e non va implementato in futuro.
+Motivi, per iscritto così la decisione non va persa:
+
+1. **Vanifica l'opt-out per costruzione.** Tutta la pipeline di outreach
+   (D37) si regge sulla suppression list: chi si disiscrive non viene
+   più contattato per quel motivo. Con N identità che condividono lo
+   stesso bacino di target, un destinatario che dice "no" a un clone
+   resta raggiungibile dagli altri per la stessa identica offerta — è
+   un modo di aggirare deliberatamente il meccanismo di opt-out, non
+   una semplice variante di marketing.
+2. **È una pratica commerciale ingannevole, non un'area grigia.** Il
+   destinatario giudica "chi mi sta scrivendo" dal mittente e dal
+   dominio nella sua inbox, non dalla privacy policy del sito di
+   atterraggio: indicare "Freesbe" nella privacy policy non rende
+   trasparente una presentazione costruita per sembrare aziende
+   indipendenti. Aggrava — non attenua — l'esposizione già discussa in
+   D37 sull'art. 130 D.Lgs. 196/2003, e apre un fronte ulteriore sulle
+   pratiche commerciali scorrette (Codice del Consumo).
+3. L'argomento "l'azienda potrebbe preferire un marchio all'altro" è
+   valido per **testare design e copy una volta sola per destinatario**
+   — che è esattamente ciò che questa decisione implementa — non per
+   moltiplicare i tentativi mascherati sullo stesso contatto.
+
+**Decisione (cosa è stato implementato al suo posto):**
+
+- **Test A/B sull'oggetto email.** 3 varianti di oggetto per il primo
+  contatto (`A`/`B`/`C`) e 2 per il follow-up (`F1`/`F2`), tutte
+  formulazioni oneste dello stesso rilievo reale — nessuna urgenza o
+  scarsità inventata. La variante è assegnata deterministicamente
+  dall'id del sito (`pickVariant`, stessa tecnica di hashing di
+  `abTest.ts` generalizzata a N varianti), così lo stesso sito vede
+  sempre lo stesso oggetto.
+- **Link al report tracciato.** Le email ora contengono una CTA "Vedi il
+  report completo" verso `/api/outreach/click/[id]`, che registra il
+  primo click e reindirizza al report dell'audit. Prima le email non
+  avevano alcun link al report: mancava sia la conversione sia qualunque
+  modo di misurarla.
+- **Un follow-up, uno solo.** `processFollowUps` invia un secondo
+  messaggio dopo 4 giorni **solo** se: il primo è partito, non è mai
+  stato inviato un follow-up, il contatto non è nella suppression list,
+  e non c'è stata conversione (nessun lead sull'audit di quel sito).
+  Stesso mittente, stesso dominio, stessa identità, e testo che dichiara
+  esplicitamente di essere un secondo contatto ("Sono di nuovo
+  Freesbe: vi avevamo scritto qualche giorno fa…").
+- **Lettura dei risultati.** `computeOutreachVariantStats` calcola per
+  variante: inviate → click → conversioni (lead registrato sull'audit),
+  mostrate in `/admin/outreach` in due tabelle separate (primo contatto
+  e follow-up).
+
+**Cosa NON è stato implementato e perché:** nessun tracking di apertura
+(pixel invisibile) — richiede di caricare risorse remote nell'email, è
+sempre più spesso bloccato dai client di posta (dati inaffidabili) ed è
+un tracciamento ulteriore del destinatario che non ci serve: il click
+sul link al report è un segnale più onesto e più solido. Nessun secondo
+follow-up: una email di recall è un comportamento di email marketing
+normale, una catena di solleciti su un contatto che non ha mai risposto
+no.
+
+**Verifica:** `npm run lint`, `npm run test` (126/126, inclusi i nuovi
+`tests/outreachVariantStats.test.ts` e i test aggiornati su
+`composeOutreachEmail`/`composeOutreachFollowUpEmail`), `npm run build`
+(webpack) tutti verdi. La migration `0008_outreach_variants.sql` va
+eseguita su Neon prima del deploy (aggiunge `email_variant`,
+`clicked_at`, `follow_up_sent_at`, `follow_up_variant` a
+`outreach_sites`); senza, le query di update falliscono e i dati
+finiscono nel fallback in-memory. Non verificabile end-to-end contro il
+sito reale da questa sessione (stesso limite di rete — D12/D21/D30/D37/
+D40/D41).

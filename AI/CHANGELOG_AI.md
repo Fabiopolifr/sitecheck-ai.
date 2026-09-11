@@ -332,3 +332,28 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - 2 nuovi test (`tests/outreachPause.test.ts`), 118 test totali
   - verificati: `npm run lint`, `npm run test` (118/118), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Test A/B sull'oggetto email + follow-up (vedi D42, che
+  documenta anche perché la proposta dei "5 cloni" del sito NON è stata
+  implementata):
+  - 3 varianti di oggetto per il primo contatto, 2 per il follow-up,
+    assegnate deterministicamente dall'id del sito (`variants.ts`,
+    stessa tecnica di hashing di `abTest.ts` generalizzata a N varianti)
+  - email ridisegnata: CTA "Vedi il report completo" verso il nuovo
+    endpoint `/api/outreach/click/[id]`, che registra il primo click e
+    reindirizza al report dell'audit (prima le email non linkavano il
+    report: mancava sia la conversione sia il modo di misurarla)
+  - `composeOutreachFollowUpEmail` + `processFollowUps` in
+    `runOutreachBatch`: un solo follow-up dopo 4 giorni, stesso mittente
+    e identità dichiarata, solo se non c'è stata conversione (nessun
+    lead sull'audit), il contatto non è nella suppression list e non è
+    già stato fatto
+  - `computeOutreachVariantStats` (`metrics.ts`) + due tabelle in
+    `/admin/outreach`: per variante inviate → click → conversioni, con
+    tassi; colonna "Follow-up" nella tabella dei siti
+  - migration `0008_outreach_variants.sql` (`email_variant`,
+    `clicked_at`, `follow_up_sent_at`, `follow_up_variant`)
+  - 8 nuovi test (`tests/outreachVariantStats.test.ts` + test aggiornati
+    su compose email), 126 test totali
+  - verificati: `npm run lint`, `npm run test` (126/126), `npm run build`
+    (webpack, tutti verdi)

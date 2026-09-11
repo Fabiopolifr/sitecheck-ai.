@@ -2,7 +2,8 @@ const globalForStore = globalThis as unknown as {
   __siteCheckAppSettings?: Map<string, string>;
 };
 
-const settings = globalForStore.__siteCheckAppSettings ?? new Map<string, string>();
+const settings =
+  globalForStore.__siteCheckAppSettings ?? new Map<string, string>();
 globalForStore.__siteCheckAppSettings = settings;
 
 export function getMemorySetting(key: string): string | null {

@@ -2,6 +2,7 @@ import { normalizeUrl } from "@/features/audit/url";
 import { runAudit } from "@/features/audit/runAudit";
 import { safeFetch } from "@/lib/security/safeFetch";
 import { getEmailProvider } from "@/lib/email";
+import { listLeads } from "@/lib/db/leadsRepository";
 import {
   createOutreachSite,
   findOutreachSiteByDomain,
@@ -12,11 +13,16 @@ import {
 import { searchBusinesses } from "@/lib/leadDiscovery/googlePlaces";
 import { extractContactEmail } from "./extractContactEmail";
 import { evaluateOutreachEligibility } from "./eligibility";
-import { composeOutreachEmail } from "./composeEmail";
+import {
+  composeOutreachEmail,
+  composeOutreachFollowUpEmail,
+} from "./composeEmail";
 import type { OutreachSite } from "./types";
 
 const DEFAULT_MANUAL_PER_DAY = 30;
 const DEFAULT_DISCOVERY_PER_DAY = 10;
+const DEFAULT_FOLLOW_UP_PER_DAY = 30;
+const FOLLOW_UP_DELAY_DAYS = 4;
 
 export type OutreachBatchSummary = {
   manualProcessed: number;
@@ -24,6 +30,7 @@ export type OutreachBatchSummary = {
   analyzed: number;
   eligible: number;
   emailed: number;
+  followedUp: number;
   errors: number;
 };
 
@@ -102,7 +109,8 @@ async function processSite(site: OutreachSite): Promise<void> {
 
   site.contactEmail = contactEmail;
 
-  const { subject, text, html } = composeOutreachEmail({
+  const { subject, text, html, variant } = composeOutreachEmail({
+    siteId: site.id,
     businessName: site.businessName,
     website: site.website,
     toEmail: contactEmail,
@@ -120,6 +128,7 @@ async function processSite(site: OutreachSite): Promise<void> {
   if (sendResult.ok) {
     site.status = "emailed";
     site.emailedAt = new Date().toISOString();
+    site.emailVariant = variant;
   } else {
     console.error("Failed to send outreach email:", sendResult.error);
     site.status = "send_failed";
@@ -128,13 +137,86 @@ async function processSite(site: OutreachSite): Promise<void> {
   await updateOutreachSite(site);
 }
 
+/**
+ * Sends one follow-up per site that was emailed at least
+ * FOLLOW_UP_DELAY_DAYS ago, never followed up before, isn't suppressed,
+ * and hasn't converted (no lead captured against its audit) — see
+ * AI/DECISIONS.md D42. Same sender identity as the first email, framed
+ * explicitly as a follow-up, not a fresh unrelated contact.
+ */
+async function processFollowUps(followUpPerDay: number): Promise<number> {
+  const [allSites, leads] = await Promise.all([
+    listOutreachSites(),
+    listLeads(),
+  ]);
+  const convertedAuditIds = new Set(
+    leads.map((l) => l.auditId).filter((id): id is string => id !== null),
+  );
+
+  const cutoff = Date.now() - FOLLOW_UP_DELAY_DAYS * 24 * 60 * 60 * 1000;
+
+  const candidates = allSites
+    .filter(
+      (s) =>
+        s.status === "emailed" &&
+        s.followUpSentAt === null &&
+        s.contactEmail &&
+        s.emailedAt &&
+        new Date(s.emailedAt).getTime() <= cutoff &&
+        !(s.auditId && convertedAuditIds.has(s.auditId)),
+    )
+    .sort((a, b) => (a.emailedAt ?? "").localeCompare(b.emailedAt ?? ""))
+    .slice(0, followUpPerDay);
+
+  let sent = 0;
+
+  for (const site of candidates) {
+    if (await isOutreachSuppressed(site.contactEmail, site.domain)) {
+      continue;
+    }
+
+    const { subject, text, html, variant } = composeOutreachFollowUpEmail({
+      siteId: site.id,
+      businessName: site.businessName,
+      website: site.website,
+      toEmail: site.contactEmail!,
+      reason: site.eligibilityReason ?? "problema di conformità rilevato",
+    });
+
+    const emailProvider = getEmailProvider();
+    const sendResult = await emailProvider.send({
+      to: site.contactEmail!,
+      subject,
+      text,
+      html,
+    });
+
+    if (sendResult.ok) {
+      site.followUpSentAt = new Date().toISOString();
+      site.followUpVariant = variant;
+      sent++;
+    } else {
+      console.error(
+        "Failed to send outreach follow-up email:",
+        sendResult.error,
+      );
+    }
+
+    await updateOutreachSite(site);
+  }
+
+  return sent;
+}
+
 export async function runOutreachBatch(options?: {
   discoveryQueries?: string[];
   manualPerDay?: number;
   discoveryPerDay?: number;
+  followUpPerDay?: number;
 }): Promise<OutreachBatchSummary> {
   const manualPerDay = options?.manualPerDay ?? DEFAULT_MANUAL_PER_DAY;
   const discoveryPerDay = options?.discoveryPerDay ?? DEFAULT_DISCOVERY_PER_DAY;
+  const followUpPerDay = options?.followUpPerDay ?? DEFAULT_FOLLOW_UP_PER_DAY;
 
   const summary: OutreachBatchSummary = {
     manualProcessed: 0,
@@ -142,6 +224,7 @@ export async function runOutreachBatch(options?: {
     analyzed: 0,
     eligible: 0,
     emailed: 0,
+    followedUp: 0,
     errors: 0,
   };
 
@@ -207,6 +290,14 @@ export async function runOutreachBatch(options?: {
         summary.errors++;
       }
     }
+  }
+
+  // 3. Follow-up: sites emailed a while ago with no conversion yet.
+  try {
+    summary.followedUp = await processFollowUps(followUpPerDay);
+  } catch (error) {
+    console.error("Outreach follow-up pass failed:", error);
+    summary.errors++;
   }
 
   return summary;

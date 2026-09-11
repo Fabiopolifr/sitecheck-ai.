@@ -1,8 +1,5 @@
 import { getPool, isDatabaseConfigured } from "./pgClient";
-import {
-  getMemorySetting,
-  setMemorySetting,
-} from "./memoryAppSettingsStore";
+import { getMemorySetting, setMemorySetting } from "./memoryAppSettingsStore";
 
 export async function getSetting(key: string): Promise<string | null> {
   if (!isDatabaseConfigured()) {
