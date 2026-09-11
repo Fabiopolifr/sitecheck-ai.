@@ -105,7 +105,13 @@ rollback() {
   mkdir -p "$APP_ROOT/tmp" && touch "$APP_ROOT/tmp/restart.txt"
   echo "Il sito è tornato alla versione funzionante di prima." >&2
 }
-trap rollback ERR
+
+# Anche su INT/TERM, non solo su errore: la build con le binding WASM può
+# durare diversi minuti e sembrare bloccata. Senza questo, un Ctrl+C a
+# metà lascerebbe il sito senza node_modules e senza .next (entrambi
+# spostati nel backup) — cioè completamente giù, nel momento in cui
+# l'utente pensa solo di aver annullato un comando.
+trap rollback ERR INT TERM
 
 rm -rf "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"

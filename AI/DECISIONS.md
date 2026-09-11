@@ -1774,3 +1774,13 @@ script di D48 e trovato solo perché il fallimento reale del difetto 1 ha
 imposto di riprovare in simulazione. Uno script di deploy va testato sul
 percorso di errore, non solo su quello felice: il percorso di errore è
 l'unico che gira quando le cose vanno male in produzione.
+
+**Aggiunta a D49 — ripristino anche su interruzione manuale.** Il trap
+era solo su `ERR`. Con le binding WASM (conseguenza del GLIBC troppo
+vecchio per il compilatore nativo di Next) la build sul server dura
+diversi minuti e sembra bloccata: un `Ctrl+C` a metà avrebbe lasciato
+il sito **senza `node_modules` e senza `.next`**, entrambi già spostati
+nel backup — cioè completamente giù, nel momento in cui l'utente pensa
+solo di aver annullato un comando. Il trap è ora su `ERR INT TERM`.
+Verificato inviando `SIGINT` a build in corso: ripristinati sia `.next`
+sia `node_modules`.
