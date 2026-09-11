@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "@/lib/config/env";
 import { runOutreachBatch } from "@/features/outreach/runOutreachBatch";
 import { isOutreachPaused } from "@/features/outreach/pause";
+import { recordOutreachRun } from "@/features/outreach/lastRun";
 
 export const runtime = "nodejs";
 
@@ -47,10 +48,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  // Registrata anche quando in pausa: serve a sapere che lo scheduler è
+  // vivo, distinguendo "fermo per scelta" da "fermo perché il cronjob
+  // non chiama più" (AI/DECISIONS.md D52).
   if (await isOutreachPaused()) {
+    await recordOutreachRun({ paused: true, summary: null });
     return NextResponse.json({ paused: true });
   }
 
   const summary = await runOutreachBatch(parsed.data);
+  await recordOutreachRun({ paused: false, summary });
   return NextResponse.json(summary);
 }

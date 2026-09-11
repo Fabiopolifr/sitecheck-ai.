@@ -475,3 +475,28 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     minuto e mezzo incluso `npm ci`. La catena completa D48→D49→D50 è
     ora funzionante: `~/deploy.sh` aggiorna il sito da GitHub senza
     passare dal pannello Hostinger
+
+- 2026-09-11 — Tre punti ciechi chiusi: migration automatiche,
+  monitoraggio scheduler, bounce/spam (D51, D52, D53):
+  - `src/instrumentation.ts` + `src/lib/db/migrate.ts`: le migration si
+    applicano da sole all'avvio del server, tracciate in
+    `schema_migrations`, una transazione ciascuna, con advisory lock per
+    i processi multipli di Passenger e senza mai impedire l'avvio del
+    sito in caso di errore. Niente più SQL Editor a mano
+  - `src/features/outreach/lastRun.ts`: ogni chiamata dello scheduler
+    viene registrata (anche quando in pausa, per distinguere la pausa
+    dal guasto); `/admin/outreach` avvisa in rosso se non arriva nulla
+    da più di 36 ore
+  - `POST /api/webhooks/resend` + `verifyWebhookSignature.ts`: bounce e
+    segnalazioni spam sopprimono automaticamente l'indirizzo, con
+    verifica della firma Svix (HMAC timing-safe, finestra anti-replay,
+    corpo letto grezzo) implementata senza aggiungere dipendenze; nuova
+    env var `RESEND_WEBHOOK_SECRET`
+  - `DEPLOYMENT.md`: la sezione sulle migration manuali è diventata il
+    ripiego, non la procedura
+  - 26 nuovi test, 176 totali
+  - **verifica end-to-end su Postgres 16 reale** (non mock): database
+    vuoto → avvio → 8 migration applicate, 12 tabelle, `/admin` 200 con
+    "tutte le tabelle presenti" (valida anche il fix D40 contro un
+    Postgres vero); riavvio → nessuna riapplicazione; chiamata
+    dell'endpoint cronjob → registrata e avviso rientrato

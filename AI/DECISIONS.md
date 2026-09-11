@@ -1853,3 +1853,122 @@ più recente di quella dell'host, e Next ripiega sulle binding WASM. È la
 stessa ragione per cui il progetto usa `next build --webpack` invece di
 Turbopack. Conseguenza pratica da conoscere: la build sul server è
 sensibilmente più lenta che in locale.
+
+### D51 — Migration applicate automaticamente all'avvio del server
+
+**Problema:** le migration andavano eseguite a mano nel SQL Editor di
+Neon, e dimenticarne una non produceva errori visibili: i repository
+ripiegano sullo store in memoria, quindi la funzionalità sembrava
+funzionare e i dati sparivano al riavvio successivo. È esattamente come
+si è persa la coda outreach (D47, D49). Il banner di D47 rende il
+problema *visibile*, ma non lo *risolve*.
+
+**Decisione:** `src/instrumentation.ts` esporta `register()`, che
+Next.js esegue una volta all'avvio di ogni istanza del server e attende
+prima di accettare richieste. Da lì `runPendingMigrations()`
+(`src/lib/db/migrate.ts`) applica le migration mancanti.
+
+**Perché `instrumentation` e non uno script nel deploy:** le variabili
+d'ambiente del pannello Hostinger (`DATABASE_URL` compresa) sono
+iniettate nel processo dell'app, **non** nella shell SSH. Uno
+`npm run migrate` lanciato da `deploy.sh` non avrebbe la connection
+string. Il processo dell'app invece ce l'ha per costruzione.
+
+**Scelte di robustezza, ognuna per un motivo concreto:**
+
+- **Tabella `schema_migrations`** (filename come chiave primaria):
+  evita di rieseguire SQL già applicato. Le migration sono comunque
+  tutte `if not exists`, quindi su un database già migrato a mano la
+  prima esecuzione le registra senza toccare nulla — nessuna procedura
+  di allineamento necessaria.
+- **Una transazione per migration:** una che fallisce non lascia lo
+  schema a metà, e non viene registrata, quindi al riavvio si riprova.
+- **`pg_try_advisory_lock`:** Passenger può avere più processi Node.
+  Chi arriva secondo non applica le stesse migration in parallelo, e
+  soprattutto non è un errore: lascia fare al primo.
+- **Non solleva mai:** un problema di migration non deve impedire
+  l'avvio del sito. Viene loggato, e lo stato dello schema resta
+  visibile nel banner di `/admin`.
+- **Esclude `RUN_ALL.sql`** (filtro `^\d{4}_.+\.sql$`), che è la
+  concatenazione di tutte e le rieseguirebbe.
+
+**Verifica end-to-end su Postgres 16 reale** (non su mock): avviato un
+database locale vuoto e il server compilato.
+- Primo avvio: `Migrazioni applicate (8): 0001_init.sql … 0008_outreach_variants.sql`,
+  12 tabelle + `schema_migrations` create.
+- `/admin` → HTTP 200 con "Database Postgres connesso, tutte le tabelle
+  presenti". **Questo valida anche il fix D40** (`timestamptz` → `Date`)
+  contro un Postgres vero, cosa che in quella sessione non era stato
+  possibile fare.
+- Secondo avvio: nessuna migration riapplicata, `schema_migrations` con
+  8 righe e 8 filename distinti.
+- Più 10 test unitari su ordine, idempotenza, rollback della migration
+  che fallisce, rilascio del lock, lock già preso, database assente,
+  connessione che fallisce.
+
+### D52 — Monitoraggio dello scheduler esterno
+
+**Problema:** il batch di outreach è innescato da cron-job.org. Se
+quello smette di chiamare — account scaduto, cronjob disattivato, URL
+cambiato — l'automazione si ferma e **nulla lo segnala**: `/admin`
+mostrerebbe semplicemente numeri che non crescono, indistinguibile da
+"non ci sono siti idonei".
+
+**Decisione:** ogni chiamata a `POST /api/outreach/run` registra
+`{at, paused, summary}` in `app_settings` (`outreach_last_run`).
+`/admin/outreach` mostra l'ultima esecuzione e, oltre
+`STALE_RUN_HOURS = 36`, un avviso rosso con cosa controllare.
+
+**Dettaglio che conta:** l'esecuzione viene registrata **anche quando
+l'automazione è in pausa**. Distingue "fermo perché l'ho messo in
+pausa" da "fermo perché nessuno chiama più l'endpoint" — due situazioni
+che senza questo apparirebbero identiche.
+
+**Verifica:** end-to-end sul server compilato con Postgres reale —
+prima della prima chiamata `/admin/outreach` mostrava "Lo scheduler non
+chiama da più di 36 ore / Nessuna esecuzione mai registrata"; dopo una
+chiamata all'endpoint, l'avviso è rientrato e la pagina mostra "Ultima
+esecuzione automatica: 11/09/2026, 10:39:36 — 0 analizzati, 0 email, 0
+follow-up". Più 9 test unitari (registrazione, pausa, valore malformato
+nel database, soglia di staleness).
+
+### D53 — Bounce e segnalazioni spam: soppressione automatica via webhook
+
+**Problema:** si sapeva quante email partivano, non quante rimbalzavano
+o venivano segnalate come spam. Continuare a scrivere a indirizzi che
+rimbalzano è il modo più rapido di bruciare la reputazione del dominio
+mittente, che per un'attività di outreach è un asset.
+
+**Decisione:** `POST /api/webhooks/resend` riceve gli eventi
+`email.bounced` e `email.complained` e aggiunge il destinatario a
+`outreach_suppressions` con `reason` `bounce`/`complaint`.
+`/admin/outreach` mostra i due conteggi.
+
+**Sicurezza — il punto centrale:** l'endpoint è pubblico. Senza
+verifica della firma, chiunque potrebbe inviare finti "bounce" e far
+sopprimere indirizzi a piacere (o, al contrario, inondare il
+database). La firma segue lo schema Svix usato da Resend: HMAC-SHA256
+su `<id>.<timestamp>.<payload>` con la chiave nel secret
+`whsec_<base64>`.
+
+- Implementata a mano con `node:crypto` invece di aggiungere il
+  pacchetto `svix`: sono venti righe, e una dipendenza in più su un
+  endpoint pubblico è superficie d'attacco in più.
+- Confronto **timing-safe**.
+- **Finestra anti-replay di 5 minuti** sul timestamp firmato.
+- Il corpo viene letto come **testo grezzo**: la firma è calcolata sui
+  byte ricevuti, e un `JSON.parse` + re-serialize li cambierebbe.
+- Senza `RESEND_WEBHOOK_SECRET` configurato l'endpoint risponde **404**,
+  non 500 né 200: non rivela di esistere.
+
+**Verifica:** 9 test sulla firma — payload manomesso, secret sbagliato,
+firma replicata oltre la tolleranza, firma legata a un altro message
+id, header mancanti, nessun secret configurato, più firme offerte di
+cui una valida, versione di firma non riconosciuta. Endpoint verificato
+sul server reale: 404 senza secret configurato.
+
+**Cosa NON è stato implementato e perché:** nessun aggiustamento
+automatico del volume di invio al crescere dei bounce. Una soglia
+scelta a tavolino senza dati reali sarebbe un numero inventato; per ora
+i conteggi sono in pagina con l'indicazione di abbassare le email al
+giorno se crescono, e la decisione resta all'owner.

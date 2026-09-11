@@ -13,6 +13,13 @@ const envSchema = z.object({
   EMAIL_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().email().optional(),
 
+  /**
+   * Secret del webhook Resend (`whsec_...`), usato per firmare gli
+   * eventi di bounce e segnalazione spam. Senza questo,
+   * POST /api/webhooks/resend risponde 404. Vedi AI/DECISIONS.md D53.
+   */
+  RESEND_WEBHOOK_SECRET: z.string().min(1).optional(),
+
   COOKIEYES_AFFILIATE_URL: z.string().url().optional(),
 
   ADMIN_EMAIL: z.string().email().optional(),

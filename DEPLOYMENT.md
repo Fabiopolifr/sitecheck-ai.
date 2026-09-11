@@ -137,12 +137,38 @@ scheda **Network** → ricarica: se un file `.css` risponde **404**,
 l'HTML servito è di un build precedente e sta chiedendo un file che non
 esiste più.
 
-## Migration del database (Neon) — come si eseguono
+## Migration del database — automatiche all'avvio
 
-Non c'è nessuno strumento automatico di migration in questo progetto
-(niente Prisma/Drizzle): le migration sono file `.sql` in `migrations/`
-che vanno eseguiti **a mano** sul database Neon. Non vengono eseguite
-dal deploy: caricare uno ZIP nuovo NON aggiorna lo schema del database.
+**Dalla versione che introduce `src/instrumentation.ts` (D51) non c'è
+più niente da fare a mano.** All'avvio del server l'app applica le
+migration in `migrations/` non ancora eseguite, tenendone traccia nella
+tabella `schema_migrations`. Quindi: deploy → riavvio → schema
+allineato.
+
+Dettagli utili a saperlo:
+
+- Ogni migration gira in una transazione propria: se una fallisce non
+  lascia lo schema a metà, e non viene registrata, quindi al riavvio
+  successivo si riprova.
+- Più processi Passenger non si pestano i piedi: chi arriva secondo
+  trova un advisory lock e lascia fare al primo.
+- Un errore di migration **non impedisce l'avvio del sito**: viene
+  loggato, e lo stato reale dello schema è visibile nel banner in
+  `/admin` (D47).
+- Su un database che era stato migrato a mano non serve alcun
+  intervento: le migration sono tutte `if not exists`, quindi la prima
+  esecuzione automatica le registra senza modificare nulla.
+
+Verificato end-to-end su un Postgres 16 reale: database vuoto → avvio
+del server → 8 migration applicate in ordine, 12 tabelle create,
+`/admin` che risponde 200 con "tutte le tabelle presenti"; al riavvio
+successivo nessuna migration riapplicata e `schema_migrations` con 8
+righe distinte.
+
+### Procedura manuale (solo come ripiego)
+
+Serve ancora se il database va allineato **senza** distribuire il
+codice, o per diagnosticare a mano.
 
 **Procedura (5 minuti, si fa dal browser):**
 

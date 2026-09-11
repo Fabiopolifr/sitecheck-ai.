@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { listOutreachSites } from "@/lib/db/outreachRepository";
+import {
+  listOutreachSites,
+  listOutreachSuppressions,
+} from "@/lib/db/outreachRepository";
 import { listLeads } from "@/lib/db/leadsRepository";
 import { StatTile } from "@/components/StatTile";
 import { OutreachQueueForm } from "@/components/OutreachQueueForm";
@@ -7,6 +10,11 @@ import { AdminNav } from "@/components/AdminNav";
 import { OutreachPauseToggle } from "@/components/OutreachPauseToggle";
 import { isOutreachPaused } from "@/features/outreach/pause";
 import { computeOutreachVariantStats } from "@/features/outreach/metrics";
+import {
+  getLastOutreachRun,
+  isRunStale,
+  STALE_RUN_HOURS,
+} from "@/features/outreach/lastRun";
 import type { OutreachStatus } from "@/features/outreach/types";
 
 export const dynamic = "force-dynamic";
@@ -44,13 +52,20 @@ export default async function AdminOutreachPage({
   searchParams: Promise<{ eligible?: string; status?: string }>;
 }) {
   const { eligible: eligibleParam, status: statusParam } = await searchParams;
-  const [sites, leads, paused] = await Promise.all([
+  const [sites, leads, paused, suppressions, lastRun] = await Promise.all([
     listOutreachSites(),
     listLeads(),
     isOutreachPaused(),
+    listOutreachSuppressions(),
+    getLastOutreachRun(),
   ]);
 
   const variantStats = computeOutreachVariantStats(sites, leads);
+  const bounced = suppressions.filter((s) => s.reason === "bounce").length;
+  const complained = suppressions.filter(
+    (s) => s.reason === "complaint",
+  ).length;
+  const cronStale = isRunStale(lastRun);
 
   const eligibleFilter: EligibleFilter =
     eligibleParam === "eligible" || eligibleParam === "ineligible"
@@ -107,13 +122,50 @@ export default async function AdminOutreachPage({
           </p>
         )}
 
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
+        {cronStale ? (
+          <p className="mt-3 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
+            <span className="font-semibold">
+              Lo scheduler non chiama da più di {STALE_RUN_HOURS} ore
+            </span>
+            <br />
+            {lastRun
+              ? `Ultima esecuzione registrata: ${new Date(lastRun.at).toLocaleString("it-IT")}.`
+              : "Nessuna esecuzione mai registrata."}{" "}
+            Senza il trigger esterno l&apos;automazione è ferma: controlla il
+            cronjob su cron-job.org (URL, header <code>x-outreach-secret</code>,
+            stato attivo).
+          </p>
+        ) : (
+          lastRun && (
+            <p className="mt-3 text-xs text-zinc-400">
+              Ultima esecuzione automatica:{" "}
+              {new Date(lastRun.at).toLocaleString("it-IT")}
+              {lastRun.paused
+                ? " (in pausa, nessun invio)"
+                : lastRun.summary
+                  ? ` — ${lastRun.summary.analyzed} analizzati, ${lastRun.summary.emailed} email, ${lastRun.summary.followedUp} follow-up`
+                  : ""}
+            </p>
+          )
+        )}
+
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatTile label="Totale analizzati" value={String(stats.total)} />
           <StatTile label="Idonei" value={String(stats.eligible)} />
           <StatTile label="Non idonei" value={String(stats.ineligible)} />
           <StatTile label="Email inviate" value={String(stats.emailed)} />
           <StatTile label="In coda" value={String(stats.queued)} />
+          <StatTile label="Bounce" value={String(bounced)} />
+          <StatTile label="Segnalati spam" value={String(complained)} />
         </div>
+        {(bounced > 0 || complained > 0) && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Indirizzi che rimbalzano o ci segnalano come spam vengono soppressi
+            automaticamente: continuare a scrivergli danneggerebbe la
+            reputazione del dominio mittente. Se le segnalazioni crescono,
+            abbassa il numero di email al giorno.
+          </p>
+        )}
 
         <div className="mt-8">
           <OutreachQueueForm />
