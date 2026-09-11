@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listOutreachSites } from "@/lib/db/outreachRepository";
 import { StatTile } from "@/components/StatTile";
 import { OutreachQueueForm } from "@/components/OutreachQueueForm";
+import { AdminNav } from "@/components/AdminNav";
 import type { OutreachStatus } from "@/features/outreach/types";
 
 export const dynamic = "force-dynamic";
@@ -74,12 +75,7 @@ export default async function AdminOutreachPage({
           <h1 className="text-xl font-semibold text-zinc-900">
             Outreach automatico
           </h1>
-          <Link
-            href="/admin"
-            className="text-sm text-zinc-500 hover:text-zinc-800"
-          >
-            ← Dashboard
-          </Link>
+          <AdminNav />
         </div>
         <p className="mt-2 text-sm text-zinc-500">
           Analisi giornaliera di siti (coda manuale + scoperta Google Maps),

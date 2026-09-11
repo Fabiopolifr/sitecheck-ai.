@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { listContentPosts } from "@/lib/db/contentRepository";
+import { AdminNav } from "@/components/AdminNav";
 import type { ContentType } from "@/features/content/types";
 
 export const dynamic = "force-dynamic";
@@ -30,12 +30,7 @@ export default async function AdminContentPage() {
           <h1 className="text-xl font-semibold text-zinc-900">
             Coda contenuti
           </h1>
-          <Link
-            href="/admin"
-            className="text-sm text-zinc-500 hover:text-zinc-800"
-          >
-            ← Dashboard
-          </Link>
+          <AdminNav />
         </div>
         <p className="mt-2 text-sm text-zinc-500">
           Generati da{" "}

@@ -293,3 +293,22 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     Neon (`audits`), dashboard `/admin` con conteggi corretti; verifica
     locale (sandbox, non Hostinger) di entrambe le varianti A/B su audit
     reali contro `pypi.org`
+
+- 2026-09-10 — Menu di navigazione condiviso in `/admin`:
+  - nuovo componente `src/components/AdminNav.tsx` (client component,
+    evidenzia la voce attiva via `usePathname`) con le tre sezioni
+    Dashboard / Coda contenuti / Outreach
+  - sostituiti i link ad-hoc ("← Dashboard", "Coda contenuti", "Outreach")
+    nelle tre pagine `/admin`, `/admin/content`, `/admin/outreach` con
+    `<AdminNav />`, per una navigazione coerente fra le sezioni
+  - preparato (non caricato automaticamente — questo ambiente di sviluppo
+    non ha accesso di rete al sito in produzione `cookie.freesbe.it`, blocco
+    di rete già noto da D12/D21/D30/D37) un file CSV pronto all'uso a
+    partire dall'export CSV di ~1000 agenzie immobiliari caricato
+    dall'owner: estratti le URL uniche dalla colonna `website`, escluse le
+    righe già marcate `commercial_status = "Contatto avviato"` (240) per
+    non ricontattare aziende già lavorate — risultato: 758 URL pronte da
+    incollare/trascinare nel form drag & drop di `/admin/outreach` (feature
+    D39), che le passerà alla pipeline di outreach automatica (D37)
+  - verificati: `npm run lint`, `npm run test` (116/116), `npm run build`
+    (webpack, tutti verdi)

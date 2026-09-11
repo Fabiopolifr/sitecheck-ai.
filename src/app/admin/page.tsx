@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { listAudits } from "@/lib/db/auditsRepository";
 import { listLeads } from "@/lib/db/leadsRepository";
 import { listAffiliateClicks } from "@/lib/db/affiliateRepository";
@@ -11,6 +10,7 @@ import {
 } from "@/features/admin/metrics";
 import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
+import { AdminNav } from "@/components/AdminNav";
 import { BAND_LABELS } from "@/features/audit/labels";
 
 // The dashboard reads live audit/lead/affiliate data on every request —
@@ -43,18 +43,7 @@ export default async function AdminDashboardPage() {
             FreeCookieBe — Admin
           </h1>
           <div className="flex items-center gap-4">
-            <Link
-              href="/admin/content"
-              className="text-sm text-zinc-500 hover:text-zinc-800"
-            >
-              Coda contenuti
-            </Link>
-            <Link
-              href="/admin/outreach"
-              className="text-sm text-zinc-500 hover:text-zinc-800"
-            >
-              Outreach
-            </Link>
+            <AdminNav />
             <AdminLogoutButton />
           </div>
         </div>
