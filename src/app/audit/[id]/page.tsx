@@ -17,6 +17,7 @@ import { resolveRegulatoryExposure } from "@/features/audit/regulatoryExposure";
 import { RegulatoryExposureCard } from "@/components/RegulatoryExposureCard";
 import { getCookieYesRecommendation } from "@/features/affiliate/cookieyesRecommendation";
 import { getFreesbeRecommendation } from "@/features/affiliate/freesbeRecommendation";
+import { getPartnerConfig } from "@/features/affiliate/partners";
 
 const SEVERITY_DOT: Record<"high" | "medium" | "low", string> = {
   high: "bg-danger",
@@ -64,6 +65,15 @@ export default async function AuditResultsPage({
   const gated = isGatedVariant();
   const recommendation = getCookieYesRecommendation(audit.categories);
   const freesbe = getFreesbeRecommendation(audit.categories);
+
+  // Il CTA affiliato viene deciso dai rilievi dell'audit, non dalla
+  // configurazione: senza questo controllo verrebbe mostrato anche
+  // quando COOKIEYES_AFFILIATE_URL non è impostata, e il click
+  // finirebbe sul 404 di /go/cookieyes. Un pulsante che porta a un
+  // errore è peggio di nessun pulsante (AI/DECISIONS.md D55).
+  const affiliateConfigured = Boolean(
+    getPartnerConfig("cookieyes")?.destination,
+  );
   const comboDiagnosis = resolveComboDiagnosis(audit.categories);
   const regulatoryExposure = resolveRegulatoryExposure(audit.categories);
 
@@ -161,7 +171,7 @@ export default async function AuditResultsPage({
           </div>
         )}
 
-        {recommendation.showRecommendation && (
+        {recommendation.showRecommendation && affiliateConfigured && (
           <div className="mt-6">
             <AffiliateRecommendation
               auditId={audit.id}

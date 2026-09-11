@@ -529,3 +529,11 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - trovato su una configurazione reale del cronjob con due oggetti JSON
     incollati
   - 5 nuovi test, 181 totali
+
+- 2026-09-11 — CTA affiliato nascosto se non configurato (D55):
+  - il pulsante CookieYes veniva mostrato in base ai rilievi dell'audit
+    senza controllare `COOKIEYES_AFFILIATE_URL`: senza quella variabile
+    il click finiva sul 404 di `/go/cookieyes`
+  - ora appare solo se il partner ha una destinazione configurata; il
+    CTA di supporto €99 e la scheda Freesbe restano attivi perché non
+    dipendono dall'affiliazione

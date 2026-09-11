@@ -2129,3 +2129,37 @@ il body reale con i due oggetti incollati che ora restituisce 400 senza
 eseguire il batch, il body assente che continua a valere come default,
 i parametri che arrivano davvero a `runOutreachBatch`, e i valori fuori
 intervallo respinti. 181 test totali.
+
+### D55 — Nessun CTA affiliato finché il link di affiliazione non esiste
+
+**Problema trovato:** `AffiliateRecommendation` veniva mostrato in base
+ai *rilievi dell'audit* (`recommendation.showRecommendation`), senza
+alcun controllo sul fatto che `COOKIEYES_AFFILIATE_URL` fosse
+configurata. Con la variabile assente — la situazione attuale, in attesa
+del link di affiliazione — il pulsante compariva comunque e il click
+finiva sul 404 di `/go/cookieyes`, che rifiuta correttamente un partner
+non configurato.
+
+**Decisione:** il CTA viene reso solo se il partner ha una destinazione.
+Un pulsante che porta a un errore è peggio di nessun pulsante: fa
+sembrare rotto il prodotto proprio nel momento in cui si sta cercando di
+guadagnare credibilità.
+
+**Dove sta il controllo, e perché lì:** in
+`src/app/audit/[id]/page.tsx`, non dentro
+`getCookieYesRecommendation`. Quella funzione è pura e coperta da molti
+test sulla tabella dei casi; farle leggere l'ambiente la
+trasformerebbe in qualcosa che dipende dalla configurazione, rendendo
+i test dipendenti da variabili d'ambiente per una ragione che non
+riguarda la logica di raccomandazione.
+
+**Cosa NON è stato toccato:** il CTA di supporto €99
+(`showSupportCta`, riquadro nel form del report) e la scheda Freesbe
+(`FreesbeRecommendationCard`) **non dipendono** dal link affiliato:
+sono servizi propri dell'azienda e restano attivi. Quindi la pagina dei
+risultati ha comunque un percorso di monetizzazione anche senza
+l'affiliazione.
+
+**Quando arriverà il link:** basta impostare
+`COOKIEYES_AFFILIATE_URL` nel pannello Hostinger e riavviare — nessuna
+modifica al codice, il CTA ricompare da solo.
