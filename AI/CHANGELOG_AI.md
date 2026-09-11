@@ -470,3 +470,8 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     limite non viene nemmeno sfiorato
   - build locale verde con "using 1 worker" e 21 route generate;
     lint e 150/150 test verdi
+  - **confermato in produzione**: deploy via SSH completato end-to-end
+    (`✓ workerThreads`, 21 route generate, nessun `EAGAIN`), circa un
+    minuto e mezzo incluso `npm ci`. La catena completa D48→D49→D50 è
+    ora funzionante: `~/deploy.sh` aggiorna il sito da GitHub senza
+    passare dal pannello Hostinger

@@ -1838,9 +1838,14 @@ verificata in entrambi gli ambienti.
 
 **Verifica:** build locale completata con `✓ workerThreads` attivo e
 "Generating static pages using 1 worker", tutte le 21 route generate
-correttamente; `npm run lint` e `npm run test` (150/150) verdi. La
-verifica sul server resta da fare al prossimo deploy — è l'ambiente in
-cui il difetto si manifesta e l'unico dove si può confermare.
+correttamente; `npm run lint` e `npm run test` (150/150) verdi.
+
+**Confermato in produzione** al deploy successivo, nell'ambiente in cui
+il difetto si manifestava: `· cpus: 1`, `✓ workerThreads`,
+`✓ Compiled successfully in 23.5s`, `✓ Finished TypeScript in 5.3s`,
+`✓ Collecting page data using 1 worker in 934ms`, tutte le 21 route
+generate, `==> FATTO.` — nessun `EAGAIN`. Durata totale del deploy
+(incluso `npm ci`): circa un minuto e mezzo.
 
 **Nota sui `⚠ GLIBC_2.29 not found`:** compaiono a ogni build sul server
 e **non sono** un errore: il binario nativo di SWC richiede una glibc
