@@ -406,3 +406,17 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - 4 nuovi test (`tests/adminRestartRoute.test.ts`), 146 test totali
   - verificati: `npm run lint`, `npm run test` (146/146), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Indicatore dello stato del database in /admin (D47):
+  - `src/lib/db/healthCheck.ts` + `DatabaseHealthBanner`: `/admin` ora
+    dice esplicitamente se i dati vengono salvati o no, distinguendo
+    `DATABASE_URL` mancante, database non raggiungibile (con l'errore
+    reale) e tabelle mancanti (con i nomi e il rimando a
+    `migrations/RUN_ALL.sql`)
+  - nasce dal problema reale segnalato dall'owner ("i dati vengono
+    cancellati a ogni aggiornamento"): le migration 0006-0008 non erano
+    mai state eseguite, quindi la coda outreach viveva solo in memoria e
+    moriva a ogni riavvio di Passenger, senza nessun segnale visibile
+  - 4 nuovi test (`tests/databaseHealth.test.ts`), 150 test totali
+  - verificati: `npm run lint`, `npm run test` (150/150), `npm run build`
+    (webpack, tutti verdi)

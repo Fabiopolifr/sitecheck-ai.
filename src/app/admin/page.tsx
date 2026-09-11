@@ -12,6 +12,8 @@ import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 import { AdminNav } from "@/components/AdminNav";
 import { AdminRestartButton } from "@/components/AdminRestartButton";
+import { DatabaseHealthBanner } from "@/components/DatabaseHealthBanner";
+import { checkDatabaseHealth } from "@/lib/db/healthCheck";
 import { BAND_LABELS } from "@/features/audit/labels";
 
 // The dashboard reads live audit/lead/affiliate data on every request —
@@ -24,11 +26,12 @@ function formatPercent(value: number | null): string {
 }
 
 export default async function AdminDashboardPage() {
-  const [audits, leads, affiliateClicks, events] = await Promise.all([
+  const [audits, leads, affiliateClicks, events, dbHealth] = await Promise.all([
     listAudits(),
     listLeads(),
     listAffiliateClicks(),
     listEvents(),
+    checkDatabaseHealth(),
   ]);
 
   const metrics = computeAdminMetrics(audits, leads, affiliateClicks);
@@ -49,6 +52,8 @@ export default async function AdminDashboardPage() {
             <AdminLogoutButton />
           </div>
         </div>
+
+        <DatabaseHealthBanner health={dbHealth} />
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatTile label="Audit totali" value={String(metrics.totalAudits)} />

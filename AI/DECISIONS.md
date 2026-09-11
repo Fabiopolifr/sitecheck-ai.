@@ -1555,3 +1555,60 @@ invalidata peggiorerebbe le prestazioni della pagina più visitata del
 sito per curare il sintomo invece della causa. Se il problema si
 ripresenta a ogni deploy, la soluzione corretta è svuotare la cache CDN
 come parte della procedura di deploy, non rendere la home dinamica.
+
+### D47 — Indicatore dello stato del database in /admin: rendere visibile il fallback in memoria
+
+**Problema che ha motivato la decisione:** l'owner ha segnalato che "i
+dati ogni volta che cambio zip e do un aggiornamento vengono
+cancellati". La causa era che le migration 0006-0008 non erano mai state
+eseguite su Neon: `outreach_sites` non esisteva, quindi ogni scrittura
+cadeva sul fallback in memoria (D13/D21) e moriva al riavvio di
+Passenger — cioè a ogni deploy.
+
+**Il difetto di progettazione che questo espone:** il fallback in
+memoria è la scelta giusta (il sito non deve andare in errore se il
+database non risponde), ma era **completamente silenzioso**. Dal punto
+di vista dell'utente una tabella mancante è indistinguibile da una
+funzionalità che funziona: carichi 758 siti, il contatore dice 758,
+tutto sembra a posto — e al riavvio successivo sono spariti. Il costo
+non è stato un crash, è stata perdita di dati senza nessun segnale.
+
+**Decisione:** `checkDatabaseHealth()` (`src/lib/db/healthCheck.ts`)
+interroga `information_schema.tables` e confronta con l'elenco delle
+tabelle attese, e `/admin` mostra in cima un banner che distingue tre
+stati di guasto diversi, ognuno con l'azione corrispondente:
+
+- `DATABASE_URL` assente → rosso, "i dati NON vengono salvati"
+- database configurato ma non raggiungibile → rosso, con il messaggio
+  d'errore reale (es. autenticazione fallita) invece di un generico
+- tabelle mancanti → giallo, **con i nomi delle tabelle** e il rimando a
+  `migrations/RUN_ALL.sql`
+
+Quando tutto è a posto: una riga grigia discreta, non un badge verde
+invadente — la conferma serve, ma non deve occupare spazio visivo in
+condizioni normali.
+
+**Perché un banner e non solo un log:** i log su Hostinger si leggono
+solo aprendo il file manager e scaricando `console.log` — è esattamente
+il motivo per cui il bug D40 ha richiesto diversi scambi per essere
+diagnosticato. Una diagnosi utile deve stare dove l'owner guarda
+comunque ogni giorno.
+
+**Perché non è stato reso un errore bloccante:** far fallire l'app
+quando manca una tabella trasformerebbe una perdita di dati parziale in
+un sito completamente giù. Il fallback resta, ma ora è dichiarato.
+
+**Cosa NON è stato implementato e perché:** nessun controllo delle
+*colonne* (solo delle tabelle). Il caso di D40/D42 — una tabella che
+esiste ma a cui manca una colonna nuova — non sarebbe intercettato.
+Aggiungerlo significa mantenere in codice lo schema atteso colonna per
+colonna, che diverge dalle migration al primo cambiamento e darebbe
+falsi allarmi; il valore in più è basso rispetto al costo di
+manutenzione. Se servisse, la strada è generare l'elenco dalle
+migration, non scriverlo a mano.
+
+**Verifica:** `npm run lint`, `npm run test` (150/150, inclusi i 4
+nuovi test in `tests/databaseHealth.test.ts` che coprono database non
+configurato, stato sano, l'elenco esatto delle tabelle mancanti nel
+caso reale di questo progetto, ed errore di connessione riportato
+invece di nascosto), `npm run build` (webpack) tutti verdi.
