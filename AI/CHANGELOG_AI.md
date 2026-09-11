@@ -386,3 +386,23 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - 16 nuovi test, 142 test totali
   - verificati: `npm run lint`, `npm run test` (142/142), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Bottone di riavvio in admin e diagnosi della home senza
+  stili (D45, D46):
+  - `POST /api/admin/restart` + bottone "Riavvia il sito" in `/admin`:
+    scrive il `restart.txt` di Passenger dall'interno dell'app, così il
+    giro manuale nel file manager di hPanel dopo ogni upload ZIP non
+    serve più (funziona dal deploy successivo a questo, perché è il
+    processo *vecchio* a servire il bottone)
+  - nuova env var `PASSENGER_RESTART_FILE` (percorso assoluto via il
+    symlink `current`, non via `hbuilds/versions/<id>`); in caso di
+    errore il bottone mostra il percorso tentato
+  - `.env.example` aggiornato anche con `GOOGLE_PLACES_API_KEY` e
+    `OUTREACH_SECRET`, che erano stati introdotti in D37 senza essere
+    documentati lì
+  - `DEPLOYMENT.md`: sezione sul bottone di riavvio e procedura di
+    isolamento per la home che si vede senza stili solo all'accesso
+    diretto (HTML statico in cache browser/CDN, non Passenger — D46)
+  - 4 nuovi test (`tests/adminRestartRoute.test.ts`), 146 test totali
+  - verificati: `npm run lint`, `npm run test` (146/146), `npm run build`
+    (webpack, tutti verdi)

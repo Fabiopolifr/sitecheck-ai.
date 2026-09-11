@@ -32,6 +32,58 @@ completamente assente (link a un file che la build nuova ha già
 sovrascritto con un altro nome) — vedi `AI/DECISIONS.md` D36 per il
 caso reale che ha portato a scoprirlo.
 
+### Scorciatoia: il bottone "Riavvia il sito" in /admin
+
+Dal deploy in cui è stato introdotto (D45) in poi, il giro nel file
+manager si può saltare: in `/admin`, accanto a "Esci", c'è **"Riavvia
+il sito"**, che scrive lui il `restart.txt`.
+
+Perché funziona: dopo l'upload di uno ZIP il processo Node **vecchio**
+è ancora in esecuzione e serve ancora `/admin` — quindi il bottone
+(che fa parte del build precedente) è lì e può toccare il file, e a
+quel punto Passenger carica il build nuovo.
+
+Richiede la variabile d'ambiente `PASSENGER_RESTART_FILE` impostata nel
+pannello Hostinger al percorso **assoluto** del file, passando per il
+symlink `current`:
+
+```
+/home/<utente>/domains/<dominio>/hbuilds/current/nodejs/tmp/restart.txt
+```
+
+Deve passare per `current` e non per `hbuilds/versions/<id>/...`: il
+processo in esecuzione ha come working directory la cartella della
+_sua_ versione (quella vecchia), mentre Passenger guarda il percorso
+via `current`, che dopo l'upload punta già al build nuovo. Senza la
+variabile il bottone ripiega su `<cwd>/tmp/restart.txt`, che su
+Hostinger è quasi certamente la cartella sbagliata — in caso di errore
+il bottone mostra il percorso che ha tentato, così si vede subito.
+
+### Se la grafica si vede male solo entrando dalla home
+
+Sintomo: `https://<dominio>/` si vede senza stili, ma passando prima da
+`/admin` e poi tornando alla home si vede bene. Non è Passenger: è
+**HTML vecchio in cache**. La home è una pagina statica e può essere
+cachata (dal browser o dalla CDN di Hostinger), mentre `/admin` è
+dinamica e non lo è mai — quindi serve i link ai CSS del build nuovo.
+Da lì la navigazione verso la home avviene lato client e riusa il CSS
+già caricato, mascherando il problema.
+
+Come si isola:
+
+1. Ricarica la home con **Ctrl+Shift+R**. Se si sistema, era la cache
+   del browser e basta così.
+2. Se non si sistema, aprila in **finestra anonima**. Se anche lì è
+   rotta, la cache non è del browser ma della **CDN**.
+3. In quel caso, in hPanel vai nella sezione CDN dell'app e usa
+   **svuota cache** (in alternativa, disattiva temporaneamente la CDN
+   per verificare).
+
+Conferma definitiva: apri gli strumenti per sviluppatori (F12) →
+scheda **Network** → ricarica: se un file `.css` risponde **404**,
+l'HTML servito è di un build precedente e sta chiedendo un file che non
+esiste più.
+
 ## Migration del database (Neon) — come si eseguono
 
 Non c'è nessuno strumento automatico di migration in questo progetto

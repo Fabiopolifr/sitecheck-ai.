@@ -1467,3 +1467,91 @@ riavviare il processo — e in quel caso l'automazione si riattiva da
 sola senza preavviso. Eseguita la migration, il flag è persistente e
 condiviso. Questo è il motivo per cui in `DEPLOYMENT.md` è stata
 aggiunta una sezione dedicata a come si eseguono le migration.
+
+### D45 — Bottone "Riavvia il sito" in /admin, per non passare più dal file manager
+
+**Decisione:** aggiunto `POST /api/admin/restart` (auth a cookie di
+sessione admin, come gli altri endpoint `/api/admin/*`) e il bottone
+"Riavvia il sito" in `/admin`, che scrive il file `restart.txt` di
+Phusion Passenger dall'interno dell'applicazione. Sostituisce il giro
+manuale nel file manager di hPanel documentato in D36.
+
+**Perché funziona (il punto non ovvio):** dopo l'upload di un nuovo ZIP
+il processo Node **vecchio** è ancora vivo e continua a servire
+`/admin` — quindi il bottone, che fa parte del build *precedente*, è
+disponibile proprio nel momento in cui serve, e toccando `restart.txt`
+fa caricare a Passenger il build nuovo. Corollario: il bottone è
+utilizzabile **dal deploy successivo** a quello che lo introduce; per
+quel primo deploy il giro manuale resta necessario.
+
+**Il percorso deve passare per `current`, non per la versione:** su
+Hostinger il processo in esecuzione ha come working directory la
+cartella della *sua* versione (`hbuilds/versions/<id>/nodejs`), mentre
+Passenger osserva il percorso via il symlink `current`, che dopo
+l'upload punta già al build nuovo. Scrivere su `process.cwd()/tmp/`
+significherebbe scrivere nella cartella della versione vecchia, dove
+Passenger non guarda. Per questo il percorso si configura
+esplicitamente con `PASSENGER_RESTART_FILE`; il fallback su `cwd` resta
+solo come tentativo, e in caso di errore la risposta (e il bottone)
+mostrano il percorso tentato, così una configurazione sbagliata è
+diagnosticabile invece che silenziosa.
+
+**Sicurezza:** il percorso proviene esclusivamente da configurazione
+server (variabile d'ambiente o cwd del processo), **mai** dalla
+richiesta — non esiste superficie di path traversal. L'endpoint è
+dietro l'auth admin, e il bottone chiede conferma prima di procedere
+perché comporta una decina di secondi di irraggiungibilità.
+
+**Dettaglio di UX che conta:** il riavvio può chiudere la connessione
+prima che la risposta arrivi al browser. Il componente tratta quindi il
+fallimento di rete come esito *atteso* ("Riavvio avviato") e non come
+errore — mostrare un errore rosso su un'operazione riuscita sarebbe
+peggio che non mostrare nulla.
+
+**Cosa NON è stato implementato e perché:** nessun riavvio automatico
+al termine di un deploy (non c'è nulla su cui agganciarlo senza accesso
+SSH o un webhook di Hostinger) e nessuna integrazione con l'API di
+Hostinger (nessuna credenziale disponibile, e metterla in ambiente per
+questo scopo sarebbe sproporzionato rispetto al problema).
+
+**Nota per il futuro:** se il pannello Hostinger dovesse offrire deploy
+diretto da repository GitHub, quella strada rende superflui sia lo ZIP
+sia questo bottone ed è preferibile a entrambi.
+
+**Verifica:** `npm run lint`, `npm run test` (146/146, inclusi i 4
+nuovi test in `tests/adminRestartRoute.test.ts` che coprono rifiuto
+senza sessione, rifiuto di un token falsificato, creazione effettiva
+del file — anche quando la cartella `tmp/` non esiste ancora — e
+presenza del percorso nella risposta), `npm run build` (webpack) tutti
+verdi. Il funzionamento reale su Hostinger non è verificabile da questa
+sessione: va confermato al primo utilizzo.
+
+### D46 — Home senza stili all'accesso diretto: HTML statico in cache, non Passenger
+
+**Sintomo riportato:** `https://cookie.freesbe.it/` si vede male
+(senza stili), ma passando prima da `/admin` e poi tornando alla home
+si vede correttamente.
+
+**Diagnosi:** non è il problema di D36 (Passenger che non riavvia), che
+romperebbe anche `/admin`. La home è una pagina **statica**
+(`○ /` nell'output di build) e quindi cacheabile dal browser o dalla
+CDN di Hostinger, mentre `/admin` è **dinamica** (`ƒ`) e non viene mai
+cachata: serve sempre i link ai CSS del build corrente. Se l'HTML della
+home in cache è di un build precedente, punta a un file CSS con un hash
+che non esiste più → 404 → pagina senza stili. Passando da `/admin` il
+CSS nuovo entra nella cache del browser, e la navigazione successiva
+verso la home avviene lato client (nessun reload completo), quindi gli
+stili restano applicati e il problema sembra sparito.
+
+**Procedura di isolamento documentata in `DEPLOYMENT.md`:** hard reload
+(esclude la cache del browser) → finestra anonima (se è ancora rotta la
+cache è della CDN) → svuotamento cache CDN in hPanel. Conferma
+definitiva in DevTools → Network: un `.css` che risponde 404.
+
+**Perché non è stato "risolto" con una modifica al codice:** è una
+questione di cache di infrastruttura, non di applicazione. Disattivare
+il prerendering statico della home per aggirare una cache mal
+invalidata peggiorerebbe le prestazioni della pagina più visitata del
+sito per curare il sintomo invece della causa. Se il problema si
+ripresenta a ogni deploy, la soluzione corretta è svuotare la cache CDN
+come parte della procedura di deploy, non rendere la home dinamica.

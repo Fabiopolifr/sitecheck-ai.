@@ -11,6 +11,7 @@ import {
 import { StatTile } from "@/components/StatTile";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 import { AdminNav } from "@/components/AdminNav";
+import { AdminRestartButton } from "@/components/AdminRestartButton";
 import { BAND_LABELS } from "@/features/audit/labels";
 
 // The dashboard reads live audit/lead/affiliate data on every request —
@@ -44,6 +45,7 @@ export default async function AdminDashboardPage() {
           </h1>
           <div className="flex items-center gap-4">
             <AdminNav />
+            <AdminRestartButton />
             <AdminLogoutButton />
           </div>
         </div>

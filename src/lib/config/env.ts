@@ -29,6 +29,15 @@ const envSchema = z.object({
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
   /** Shared secret an external scheduler sends to trigger the daily outreach batch — same pattern as CONTENT_GENERATION_SECRET. */
   OUTREACH_SECRET: z.string().min(16).optional(),
+
+  /**
+   * Absolute path of the Phusion Passenger restart trigger file, used by
+   * the "Riavvia il sito" button in /admin (AI/DECISIONS.md D45). Must
+   * point through Hostinger's `current` symlink, not the versioned
+   * directory, so the write lands in the build Passenger is watching.
+   * Falls back to `<cwd>/tmp/restart.txt` when unset.
+   */
+  PASSENGER_RESTART_FILE: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
