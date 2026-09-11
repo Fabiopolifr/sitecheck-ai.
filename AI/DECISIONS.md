@@ -1612,3 +1612,92 @@ nuovi test in `tests/databaseHealth.test.ts` che coprono database non
 configurato, stato sano, l'elenco esatto delle tabelle mancanti nel
 caso reale di questo progetto, ed errore di connessione riportato
 invece di nascosto), `npm run build` (webpack) tutti verdi.
+
+### D48 — Deploy via SSH con uno script, al posto dell'upload ZIP manuale
+
+**Premessa: una mia affermazione sbagliata, corretta.** In D36 e in
+questa sessione avevo affermato che Hostinger Cloud Startup non dà
+accesso SSH. **È falso**: l'owner ha mostrato hPanel → Avanzate →
+Accesso SSH, attivo. Tutta l'impalcatura del deploy via ZIP era stata
+costruita su quel presupposto sbagliato.
+
+**Cosa è emerso ispezionando il server via SSH:**
+
+- `hbuilds/current` è un symlink a `versions/<uuid>`, rigenerato dal
+  pannello a ogni deploy dallo ZIP.
+- `node`/`npm` **non sono nel PATH** della shell SSH, ma esistono in
+  `/opt/alt/alt-nodejs{18,20,22,24}/root/usr/bin/` (CloudLinux).
+- `package.json` nella cartella dell'app è **identico al nostro**: il
+  pannello non lo genera (mia seconda ipotesi sbagliata, verificata e
+  scartata). L'unico file suo è `server.js`, l'entry point per
+  Passenger, che non è nel repository.
+- Il repository è pubblico, quindi il server può clonarlo senza
+  credenziali: nessuna deploy key da configurare, nessun segreto da far
+  passare da questa chat.
+
+**Decisione:** `scripts/deploy-hostinger.sh`, da copiare in
+`~/deploy.sh` sul server. Rende la cartella dell'app una working tree
+git e aggiorna con `git fetch --depth=1` + `git reset --hard
+FETCH_HEAD`, poi `npm install`, `npm run build`, `touch
+tmp/restart.txt`.
+
+**Perché `git reset --hard` è sicuro qui:** agisce solo sui file
+tracciati. `server.js` non è nel repository e `node_modules/`, `.next/`,
+`tmp/` sono in `.gitignore` — restano tutti intatti. Verificato, non
+dedotto (vedi sotto).
+
+**Perché lo script sta fuori dalla cartella dell'app:** bash legge lo
+script mentre lo esegue, e il deploy sostituisce i file dell'app.
+Eseguirlo da `$APP_ROOT/scripts/` significherebbe cambiargli il codice
+sotto i piedi a metà esecuzione.
+
+**Protezione contro la build fallita:** la build gira nella cartella
+servita da Passenger, quindi un fallimento a metà lascerebbe il sito
+rotto. Prima della build `.next` viene **spostato** in
+`.next.previous` (non copiato: nessun raddoppio di spazio su disco, e
+la build parte pulita); un `trap ... ERR` lo rimette al suo posto e
+riavvia se qualcosa fallisce. Il sito torna alla versione funzionante
+invece di restare a metà.
+
+**Controllo di sicurezza sulla directory:** se `server.js` non c'è, lo
+script si ferma. È la garanzia di non eseguire `git reset --hard` nella
+cartella sbagliata se il symlink `current` puntasse altrove.
+
+**Verifica, entrambi i percorsi, prima del primo uso reale:** simulato
+l'ambiente Hostinger in sandbox (finto `/opt/alt/alt-nodejs22`, finta
+cartella app con `server.js`, `node_modules/`, `.next/` e `console.log`
+preesistenti).
+- *Percorso di successo:* clone, install e build completati;
+  `server.js` e `console.log` intatti; `.next` ricostruito pulito;
+  backup rimosso; `tmp/restart.txt` creato.
+- *Percorso di fallimento:* creato un branch con un errore di sintassi
+  TypeScript; lo script è uscito con codice 1 e ha ripristinato la
+  build precedente **intatta e completa** (marcatore presente,
+  `BUILD_ID` al suo posto, 21 file), riavviando Passenger.
+
+**Limite noto del ripristino:** rimette a posto `.next`, ma i sorgenti e
+`node_modules` restano quelli nuovi (`git reset` e `npm install` girano
+prima della build). È innocuo — a runtime Next.js serve solo `.next` —
+e il deploy successivo riallinea tutto.
+
+**Trappola da conoscere:** premere "Ridispiega" nel pannello dopo essere
+passati a questo metodo ricostruisce da `hbuilds/last-source`, cioè
+dall'ultimo ZIP caricato, riportando il sito a una versione vecchia
+**senza segnalarlo**.
+
+**Cosa NON è stato implementato e perché:** nessuna GitHub Action che
+faccia il deploy da sola a ogni push. Richiederebbe una chiave SSH del
+server dentro i Secrets di GitHub, e soprattutto un deploy automatico
+non presidiato su un hosting condiviso (load medio osservato: ~10) può
+fallire a metà senza che nessuno guardi. Con lo script, l'owner lancia
+un comando e vede l'esito. Se in futuro si volesse l'automazione, la
+chiave va generata sul server e incollata **dall'owner** nei Secrets di
+GitHub: non deve passare da questa chat.
+
+**Nota sulle credenziali:** l'owner ha proposto di fornire le
+credenziali SSH per far eseguire le modifiche direttamente da qui. È
+stato verificato con un test, non supposto, che questo ambiente non può
+comunque raggiungere il server (nessun client `ssh` installato;
+connessione TCP a `<ip>:65002` in timeout; il proxy gestisce solo
+HTTP/HTTPS verso domini consentiti). A prescindere, la password non va
+condivisa in chat: resterebbe nel transcript della conversazione.

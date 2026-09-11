@@ -32,6 +32,59 @@ completamente assente (link a un file che la build nuova ha già
 sovrascritto con un altro nome) — vedi `AI/DECISIONS.md` D36 per il
 caso reale che ha portato a scoprirlo.
 
+### Modo consigliato: deploy via SSH con `scripts/deploy-hostinger.sh`
+
+L'hosting **ha accesso SSH** (hPanel → Avanzate → Accesso SSH), quindi
+il giro "scarica ZIP → carica su hPanel → attendi → crea `restart.txt`"
+si può sostituire con un comando solo. Vedi `AI/DECISIONS.md` D48.
+
+Installazione, una volta sola:
+
+```bash
+ssh -p 65002 <utente>@<ip>
+git clone --depth=1 https://github.com/Fabiopolifr/sitecheck-ai. ~/repo-tmp
+cp ~/repo-tmp/scripts/deploy-hostinger.sh ~/deploy.sh
+chmod +x ~/deploy.sh && rm -rf ~/repo-tmp
+```
+
+Da quel momento, ogni aggiornamento è:
+
+```bash
+~/deploy.sh
+```
+
+Lo script: prende Node da `/opt/alt/` (non è nel PATH della shell SSH),
+verifica l'accesso a GitHub **prima** di toccare file, controlla che la
+cartella sia quella giusta (deve contenere `server.js`), aggiorna il
+codice con `git reset --hard`, esegue `npm install` e `npm run build`, e
+tocca `tmp/restart.txt`.
+
+**Va tenuto in `~/deploy.sh`, fuori dalla cartella dell'app**: bash
+legge lo script mentre lo esegue, e il deploy sostituisce i file
+dell'app — eseguirlo da dentro significherebbe cambiargli il codice
+sotto i piedi a metà esecuzione.
+
+Cosa **non** viene toccato: `server.js` (generato dal pannello, non è nel
+repository), `node_modules/`, `.next/`, `tmp/` e i log. `git reset
+--hard` agisce solo sui file tracciati, e gli altri non lo sono.
+
+**Se la build fallisce**, lo script rimette al suo posto la build
+precedente e riavvia: il sito torna alla versione funzionante invece di
+restare rotto a metà. Entrambi i percorsi (successo e fallimento) sono
+stati verificati in una simulazione dell'ambiente Hostinger prima del
+primo utilizzo reale.
+
+Due cose da sapere:
+
+- La build gira nella cartella servita da Passenger, quindi per un paio
+  di minuti il sito risponde male. È la stessa finestra del deploy dal
+  pannello.
+- **Non premere "Ridispiega" nel pannello** dopo aver iniziato a usare
+  questo metodo: ricostruirebbe dall'ultimo ZIP caricato
+  (`hbuilds/last-source`), riportando il sito a una versione vecchia
+  senza segnalarlo. Se serve tornare al metodo ZIP, prima carica uno ZIP
+  aggiornato.
+
 ### Scorciatoia: il bottone "Riavvia il sito" in /admin
 
 Dal deploy in cui è stato introdotto (D45) in poi, il giro nel file

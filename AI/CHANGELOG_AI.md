@@ -420,3 +420,21 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - 4 nuovi test (`tests/databaseHealth.test.ts`), 150 test totali
   - verificati: `npm run lint`, `npm run test` (150/150), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Deploy via SSH in un comando (D48):
+  - scoperto che l'hosting **ha** accesso SSH: avevo affermato il
+    contrario, era sbagliato e tutto il flusso via ZIP nasceva da quel
+    presupposto
+  - `scripts/deploy-hostinger.sh` (da copiare in `~/deploy.sh` sul
+    server): prende Node da `/opt/alt/` (non è nel PATH SSH), verifica
+    GitHub prima di toccare file, controlla di essere nella cartella
+    giusta (deve contenere `server.js`), aggiorna con `git reset
+    --hard`, esegue install e build, riavvia Passenger
+  - se la build fallisce, ripristina la build precedente e riavvia: il
+    sito non resta rotto a metà
+  - verificato in una simulazione dell'ambiente Hostinger **entrambi i
+    percorsi**: successo (file del pannello intatti, build pulita) e
+    fallimento (branch con errore TypeScript → ripristino completo)
+  - `DEPLOYMENT.md`: procedura di installazione e uso, più le due
+    trappole (finestra di build sul sito live, e "Ridispiega" del
+    pannello che riporterebbe a una versione vecchia)
