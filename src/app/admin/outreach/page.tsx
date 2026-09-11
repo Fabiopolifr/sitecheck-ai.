@@ -3,6 +3,8 @@ import { listOutreachSites } from "@/lib/db/outreachRepository";
 import { StatTile } from "@/components/StatTile";
 import { OutreachQueueForm } from "@/components/OutreachQueueForm";
 import { AdminNav } from "@/components/AdminNav";
+import { OutreachPauseToggle } from "@/components/OutreachPauseToggle";
+import { isOutreachPaused } from "@/features/outreach/pause";
 import type { OutreachStatus } from "@/features/outreach/types";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +37,10 @@ export default async function AdminOutreachPage({
   searchParams: Promise<{ eligible?: string; status?: string }>;
 }) {
   const { eligible: eligibleParam, status: statusParam } = await searchParams;
-  const sites = await listOutreachSites();
+  const [sites, paused] = await Promise.all([
+    listOutreachSites(),
+    isOutreachPaused(),
+  ]);
 
   const eligibleFilter: EligibleFilter =
     eligibleParam === "eligible" || eligibleParam === "ineligible"
@@ -77,11 +82,20 @@ export default async function AdminOutreachPage({
           </h1>
           <AdminNav />
         </div>
-        <p className="mt-2 text-sm text-zinc-500">
-          Analisi giornaliera di siti (coda manuale + scoperta Google Maps),
-          filtro per idoneità privacy/cookie, invio email automatico ai siti
-          idonei.
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-4">
+          <p className="text-sm text-zinc-500">
+            Analisi giornaliera di siti (coda manuale + scoperta Google
+            Maps), filtro per idoneità privacy/cookie, invio email
+            automatico ai siti idonei.
+          </p>
+          <OutreachPauseToggle initialPaused={paused} />
+        </div>
+        {paused && (
+          <p className="mt-3 rounded-lg bg-warning/10 px-4 py-2 text-sm text-warning">
+            Automazione in pausa: il prossimo trigger dal cronjob non
+            analizzerà né invierà email finché non riattivi.
+          </p>
+        )}
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
           <StatTile label="Totale analizzati" value={String(stats.total)} />

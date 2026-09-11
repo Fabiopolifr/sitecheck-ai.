@@ -1250,3 +1250,46 @@ Postgres reale — la correzione è stata verificata leggendo il codice e
 confermando che ogni `row.*_at` nei file toccati passa ora da
 `new Date().toISOString()`, non con un test automatico contro Postgres
 reale, che questa sessione non può eseguire).
+
+### D41 — Pausa/ripresa manuale dell'automazione outreach
+
+**Decisione:** aggiunto un flag persistente `outreach_paused` (tabella
+generica `app_settings`, chiave/valore) controllato da un bottone in
+`/admin/outreach`. Quando è attivo, `POST /api/outreach/run` — l'endpoint
+chiamato ogni giorno dal cronjob esterno — risponde subito
+`{paused: true}` senza fare nulla: nessuna analisi, nessuna email
+inviata. Il cronjob continua a "sparare" alla stessa frequenza, ma resta
+innocuo finché l'owner non riattiva dal pannello.
+
+**Motivazione:** l'owner ha chiesto un modo per fermare/far ripartire
+l'invio automatico di email senza dover disattivare il cronjob su
+cron-job.org (un servizio esterno separato) o rimuovere `OUTREACH_SECRET`
+dall'ambiente — entrambe operazioni scomode e facili da dimenticare di
+riattivare. Un flag a un click nel pannello admin, verificato ad ogni
+chiamata dell'endpoint, è il modo più semplice e meno rischioso di dare
+questo controllo.
+
+**Perché una tabella generica `app_settings` e non un campo dedicato:**
+è l'unico flag di questo tipo per ora, ma è ragionevole aspettarsi che ne
+arrivino altri in futuro (es. pausa del content engine); una tabella
+key/value generica evita una migration per ogni nuovo interruttore.
+Segue lo stesso pattern fallback-in-memory di tutte le altre repository
+(vedi D13/D21/D30/D37): se `DATABASE_URL` non è configurato, il flag
+vive solo in memoria di processo (si perde ad ogni riavvio, accettabile
+per un ambiente di sviluppo locale).
+
+**Cosa NON è stato implementato e perché:** nessuna pausa granulare per
+sorgente (es. "pausa solo la discovery Google Maps, non la coda
+manuale") — non richiesta, e avrebbe complicato la UI per un caso d'uso
+che non si è ancora presentato. Se servirà, si aggiunge un secondo flag
+allo stesso `app_settings` senza toccare lo schema.
+
+**Verifica:** `npm run lint`, `npm run test` (118/118, incluso il nuovo
+`tests/outreachPause.test.ts` che verifica lettura/scrittura del flag
+sul fallback in-memory), `npm run build` (webpack) tutti verdi. Non
+verificabile end-to-end contro Neon reale da questa sessione (stesso
+limite di rete di sempre — vedi D12/D21/D30/D37/D40); la migration
+`0007_app_settings.sql` va eseguita manualmente su Neon come le
+precedenti prima che il flag funzioni in produzione con persistenza
+reale (userà comunque il fallback in-memory anche senza, ma il valore
+non sopravvive a un riavvio del processo Node su Hostinger).

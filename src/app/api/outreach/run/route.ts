@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/lib/config/env";
 import { runOutreachBatch } from "@/features/outreach/runOutreachBatch";
+import { isOutreachPaused } from "@/features/outreach/pause";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,10 @@ export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  if (await isOutreachPaused()) {
+    return NextResponse.json({ paused: true });
   }
 
   const summary = await runOutreachBatch(parsed.data);

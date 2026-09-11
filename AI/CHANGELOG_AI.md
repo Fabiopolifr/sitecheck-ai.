@@ -312,3 +312,23 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     D39), che le passerà alla pipeline di outreach automatica (D37)
   - verificati: `npm run lint`, `npm run test` (116/116), `npm run build`
     (webpack, tutti verdi)
+
+- 2026-09-11 — Pausa/ripresa manuale dell'automazione outreach:
+  - nuova tabella generica `app_settings` (key/value, migration
+    `0007_app_settings.sql`) + repository `appSettingsRepository.ts` con
+    lo stesso pattern fallback-in-memory delle altre repository
+  - `src/features/outreach/pause.ts`: `isOutreachPaused()` /
+    `setOutreachPaused()` sopra `app_settings` (chiave `outreach_paused`)
+  - `POST /api/outreach/run` (chiamato dal cronjob esterno) ora controlla
+    il flag prima di girare la pipeline: se in pausa risponde
+    `{paused: true}` senza analizzare né inviare nulla — il cronjob
+    continua a "sparare" ogni giorno, ma l'automazione resta ferma finché
+    non viene riattivata
+  - nuovo endpoint admin `POST /api/admin/outreach/pause` (stessa auth a
+    cookie di sessione admin di `/api/admin/outreach/queue`) + bottone
+    `OutreachPauseToggle` in `/admin/outreach` che mostra lo stato
+    corrente e permette di mettere in pausa/riattivare con un click,
+    con banner di avviso quando l'automazione è ferma
+  - 2 nuovi test (`tests/outreachPause.test.ts`), 118 test totali
+  - verificati: `npm run lint`, `npm run test` (118/118), `npm run build`
+    (webpack, tutti verdi)
