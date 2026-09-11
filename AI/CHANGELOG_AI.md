@@ -438,3 +438,23 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
   - `DEPLOYMENT.md`: procedura di installazione e uso, più le due
     trappole (finestra di build sul sito live, e "Ridispiega" del
     pannello che riporterebbe a una versione vecchia)
+
+- 2026-09-11 — Correzioni al deploy via SSH dopo il primo uso reale (D49):
+  - il deploy usa `npm ci` invece di `npm install`: sul server
+    `react-dom@19.2.8` era installato **senza `client.js`** e
+    `npm install` lo considerava a posto perché la versione combaciava,
+    facendo fallire la build con `Can't resolve 'react-dom/client'`
+  - deploy transazionale: `node_modules` e `.next` vengono spostati e
+    ripristinati **entrambi** in caso di errore, per tornare a uno stato
+    coerente invece di un misto vecchio/nuovo
+  - l'installazione viene saltata quando il lock file non è cambiato
+    **e** i moduli critici risolvono davvero
+    (`require.resolve('react-dom/client')`), non in base ai numeri di
+    versione — è il controllo che intercetta un pacchetto incompleto
+  - corretto un bug mio introdotto in D48: i backup rinominati dentro
+    l'app root (`node_modules.previous`) venivano type-checkati da
+    TypeScript (`tsconfig.json` esclude solo `node_modules`), caricando
+    tipi duplicati e rompendo la build. Ora stanno in `$HOME`, fuori
+    dall'app root
+  - riverificati in simulazione entrambi i percorsi, riproducendo il
+    guasto reale di produzione (react-dom mutilato + stamp bugiardo)

@@ -1701,3 +1701,76 @@ comunque raggiungere il server (nessun client `ssh` installato;
 connessione TCP a `<ip>:65002` in timeout; il proxy gestisce solo
 HTTP/HTTPS verso domini consentiti). A prescindere, la password non va
 condivisa in chat: resterebbe nel transcript della conversazione.
+
+### D49 — `npm ci` invece di `npm install` nel deploy, e i backup fuori dall'app root
+
+Il primo deploy reale con lo script di D48 è fallito. Due difetti
+distinti, entrambi trovati grazie a quel fallimento.
+
+**Difetto 1 — `npm install` non ripara un pacchetto incompleto.**
+
+La build si è fermata su `Module not found: Can't resolve
+'react-dom/client'`. Ispezionando il server: `node_modules/react-dom`
+c'era, con `"version": "19.2.8"` corretta nel suo `package.json`, ma
+**senza il file `client.js`** — pacchetto installato a metà, presumibilmente
+dal deploy via ZIP del pannello.
+
+`npm install` confronta i *numeri di versione* di ciò che trova già in
+`node_modules` con il lock file: versione giusta → "già installato,
+salto". Non verifica mai l'integrità dei file dentro il pacchetto. Per
+questo riportava "added 505 packages, and changed 4 packages" senza
+toccare react-dom, e la build falliva.
+
+Il deploy usa quindi **`npm ci`**, che cancella `node_modules` e lo
+ricostruisce esattamente dal lock file, unico modo per garantire
+pacchetti completi.
+
+Poiché `npm ci` cancella le dipendenze del sito in produzione, il deploy
+è diventato transazionale: `node_modules` e `.next` vengono **spostati**
+(`mv`, istantaneo, nessuna copia da 800 MB) e rimessi **entrambi** al
+loro posto in caso di errore. Si torna così a uno stato coerente, non a
+un misto di dipendenze nuove e build vecchia.
+
+Per non pagare un `npm ci` completo a ogni deploy, l'installazione viene
+saltata quando il lock file è identico a quello dell'ultima
+installazione riuscita (copia in `.deploy-installed-lock`) **e** la
+verifica di risoluzione passa. La verifica non guarda i numeri di
+versione ma prova a risolvere davvero i moduli critici
+(`node -e "require.resolve('react-dom/client')"` ecc.): è esattamente
+il controllo che avrebbe intercettato questo guasto.
+
+**Difetto 2 — i backup dentro l'app root rompono la compilazione.**
+
+Nella prima versione i backup erano rinominati sul posto
+(`node_modules.previous`). Il test ha mostrato TypeScript che
+type-checkava `node_modules.previous/zod/src/.../*.test.ts`:
+`tsconfig.json` esclude `"node_modules"`, non `"node_modules.previous"`,
+quindi la copia rientrava nella compilazione, caricava una seconda volta
+i tipi di React/Next e faceva fallire la build con errori su file
+innocenti (`AdminNav.tsx`, `unsubscribe/page.tsx` — verificato che
+`usePathname()` in Next 16 dichiara `string`, quindi quegli errori erano
+artefatti dei tipi duplicati, non bug del nostro codice).
+
+I backup stanno ora in `$HOME/.freecookiebe-deploy-backup`, fuori
+dall'app root. Stesso filesystem (`/dev/sda4` monta `/home/<utente>`),
+quindi `mv` resta istantaneo.
+
+**Verifica, entrambi i percorsi, riproducendo il guasto reale:** in
+sandbox, `node_modules` completo ma con `react-dom/client.js`
+cancellato e uno `.deploy-installed-lock` che dichiarava falsamente
+"tutto installato".
+- *Riparazione:* la verifica di risoluzione ha rilevato il pacchetto
+  rotto ignorando lo stamp, `npm ci` ha ricostruito l'albero,
+  `client.js` è tornato (1373 byte), build completata, `server.js` e i
+  log intatti, backup ripuliti, nessun residuo `.previous` nell'app
+  root.
+- *Fallimento:* con un branch contenente un errore di sintassi
+  TypeScript, ripristinati **sia** `.next` (marcatore presente,
+  `BUILD_ID` al suo posto, 21 voci) **sia** `node_modules` (marcatore
+  presente, `react-dom` integro), con riavvio di Passenger.
+
+**Nota di metodo:** il difetto 2 era un bug mio, introdotto nello
+script di D48 e trovato solo perché il fallimento reale del difetto 1 ha
+imposto di riprovare in simulazione. Uno script di deploy va testato sul
+percorso di errore, non solo su quello felice: il percorso di errore è
+l'unico che gira quando le cose vanno male in produzione.
