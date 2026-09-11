@@ -500,3 +500,23 @@ va oltre l'MVP. Persistenza migrata da Supabase a PostgreSQL self-hosted
     "tutte le tabelle presenti" (valida anche il fix D40 contro un
     Postgres vero); riavvio → nessuna riapplicazione; chiamata
     dell'endpoint cronjob → registrata e avviso rientrato
+
+- 2026-09-11 — Tre punti ciechi chiusi (D51, D52, D53):
+  - **migrazioni automatiche**: `src/instrumentation.ts` + 
+    `src/lib/db/migrate.ts` applicano all'avvio del server le migration
+    non ancora eseguite, con lock consultivo Postgres (Passenger ha più
+    processi), una transazione per migration e nessuna eccezione
+    propagata. Non c'è più un passaggio manuale su Neon da ricordare
+  - **scheduler fermo rilevabile**: ogni chiamata a
+    `/api/outreach/run` registra timestamp ed esito; oltre 36 ore
+    `/admin/outreach` mostra un avviso. Registrato anche quando in
+    pausa, per distinguere "fermo per scelta" da "cronjob morto"
+  - **bounce e segnalazioni spam**: `POST /api/webhooks/resend`
+    sopprime gli indirizzi che rimbalzano o ci segnalano, con verifica
+    della firma Svix scritta con `node:crypto` (HMAC-SHA256, confronto
+    a tempo costante, anti-replay) invece di aggiungere il pacchetto
+    `svix`; due contatori in admin
+  - lo script di deploy fa `cd "$HOME"` all'avvio: il pannello ruota le
+    cartelle di versione e lanciarlo da dentro `current/nodejs` poteva
+    dare un errore di cwd cancellata
+  - 26 nuovi test, 176 totali; lint e build (webpack) verdi

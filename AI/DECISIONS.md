@@ -1972,3 +1972,126 @@ automatico del volume di invio al crescere dei bounce. Una soglia
 scelta a tavolino senza dati reali sarebbe un numero inventato; per ora
 i conteggi sono in pagina con l'indicazione di abbassare le email al
 giorno se crescono, e la decisione resta all'owner.
+
+### D51 — Migrazioni applicate automaticamente all'avvio del server
+
+**Problema:** le migration andavano eseguite a mano nel SQL Editor di
+Neon. Dimenticarne una non produce errori visibili: i repository
+ripiegano sullo store in memoria, la funzionalità sembra funzionare e i
+dati spariscono al riavvio successivo. È costato la perdita della coda
+outreach (D47), e il banner diagnostico aggiunto allora *segnala* il
+problema ma non lo risolve.
+
+**Decisione:** `src/instrumentation.ts` esporta `register()`, che Next
+esegue **una volta** all'avvio del server e completa prima di accettare
+richieste (verificato nei docs della versione installata, non a
+memoria). Da lì `runPendingMigrations()` (`src/lib/db/migrate.ts`)
+applica i file `migrations/00NN_*.sql` non ancora eseguiti, tenendone
+traccia in `schema_migrations`.
+
+Il deploy diventa così: `~/deploy.sh` → riavvio → schema allineato. Non
+c'è più un passaggio manuale da ricordare.
+
+**Scelte che contano:**
+
+- **Lock consultivo Postgres** (`pg_try_advisory_lock`): Passenger può
+  avere più processi Node, che partirebbero tutti insieme. Chi non
+  ottiene il lock non è in errore — si fa da parte e lascia lavorare
+  l'altro.
+- **Una transazione per migration:** una che fallisce viene annullata da
+  sola e **non** viene registrata, quindi il prossimo avvio la riprova,
+  senza lasciare uno schema a metà.
+- **Non solleva mai:** un problema di migration non deve impedire
+  l'avvio del sito. L'errore va nel log, e lo stato dello schema resta
+  visibile nel banner di /admin.
+- **`RUN_ALL.sql` è escluso** dal pattern `^\d{4}_.+\.sql$`: è la
+  concatenazione di tutte le migration e le rieseguirebbe a ogni avvio.
+- **Nessuno script da riga di comando:** era la prima idea, ma le
+  variabili d'ambiente di Hostinger (`DATABASE_URL` compreso) sono
+  iniettate nel processo dell'app, non nella shell SSH — uno script
+  lanciato a mano non avrebbe la connessione. Agganciarsi all'avvio
+  dell'app risolve il problema invece di aggirarlo.
+- **Nessun trattamento speciale per il database esistente:** le
+  migration sono tutte idempotenti (`if not exists`), quindi applicarle
+  su uno schema già completo sono no-op che vengono semplicemente
+  registrate.
+
+**Verifica:** 10 test (`tests/migrate.test.ts`) con Postgres simulato:
+ordine di applicazione, esclusione di `RUN_ALL.sql`, idempotenza al
+secondo avvio, applicazione delle sole migration mancanti, rollback e
+nome del file nell'errore, rilascio del lock anche in caso di
+fallimento, resa quando un altro processo tiene il lock, nessuna query
+senza `DATABASE_URL`, errore di connessione riportato invece che
+lanciato. Verificato inoltre che la build generi
+`.next/server/instrumentation.js` e che il chunk con
+`pg_try_advisory_lock` sia presente.
+
+### D52 — Rilevare uno scheduler fermo
+
+**Problema:** il batch di outreach è innescato da cron-job.org. Se
+smette di chiamare — account scaduto, cronjob disattivato, URL
+cambiato — l'automazione si ferma e **nulla lo segnala**: /admin
+mostrerebbe gli stessi numeri di ieri senza alcun avviso.
+
+**Decisione:** ogni chiamata a `POST /api/outreach/run` registra
+timestamp ed esito in `app_settings`
+(`src/features/outreach/lastRun.ts`). `/admin/outreach` mostra
+l'ultima esecuzione e, oltre 36 ore, un avviso rosso con cosa
+controllare.
+
+**Dettaglio importante:** la registrazione avviene **anche quando
+l'automazione è in pausa**. Serve a distinguere "fermo perché l'ho
+messo in pausa io" da "fermo perché nessuno chiama più l'endpoint": due
+situazioni identiche nei numeri e completamente diverse nella causa.
+
+**Verifica:** 9 test (`tests/outreachLastRun.test.ts`), inclusi il caso
+"in pausa ma vivo" che non deve risultare guasto e un valore malformato
+nel database che deve valere come "nessuna esecuzione" invece di far
+fallire la pagina admin.
+
+### D53 — Webhook Resend: sopprimere bounce e segnalazioni spam
+
+**Problema:** si sapeva quante email partivano, non quante rimbalzavano
+o venivano segnalate come spam. Continuare a scrivere a indirizzi che
+rimbalzano brucia la reputazione del dominio mittente, che per
+un'attività di outreach è un asset, non un dettaglio tecnico.
+
+**Decisione:** `POST /api/webhooks/resend` riceve gli eventi
+`email.bounced` e `email.complained` e aggiunge il destinatario a
+`outreach_suppressions` con `reason` "bounce" o "complaint" — la stessa
+lista che già blocca chi si disiscrive. Due contatori in
+`/admin/outreach` rendono il fenomeno visibile.
+
+**Sicurezza — il punto centrale:** l'endpoint è pubblico. Senza
+verifica della firma, chiunque potrebbe inviare finti "bounce" e far
+sopprimere gli indirizzi che vuole, disattivando l'outreach dall'esterno.
+`verifyWebhookSignature` implementa lo schema Svix usato da Resend:
+HMAC-SHA256 su `<id>.<timestamp>.<payload>`, confronto a tempo costante
+(`timingSafeEqual`), e finestra anti-replay di 5 minuti.
+
+Due dettagli non ovvi:
+- il corpo va letto come **testo grezzo**: la firma copre i byte esatti
+  ricevuti, e un `JSON.parse` seguito da re-serializzazione li
+  cambierebbe, facendo fallire ogni verifica;
+- se `RESEND_WEBHOOK_SECRET` non è configurato l'endpoint risponde
+  **404**, non 401: non si rivela l'esistenza di un endpoint inerte.
+
+**Perché non il pacchetto `svix`:** sono venti righe di `node:crypto`, e
+su un endpoint pubblico ogni dipendenza in più è superficie d'attacco in
+più. Scelta coerente con D39 (rifiuto di `xlsx` per vulnerabilità
+aperte).
+
+**Verifica:** 9 test (`tests/verifyWebhookSignature.test.ts`): firma
+valida accettata; payload manomesso, secret sbagliato, firma legata a
+un altro `id`, header mancanti e secret non configurato tutti
+respinti; replay oltre la tolleranza respinto; accettazione quando una
+di più firme offerte combacia; versioni di firma sconosciute ignorate.
+
+**Nota operativa:** lo `spawn ... EAGAIN` di D50 e questo webhook
+ricordano che lo script di deploy non deve dipendere dalla directory da
+cui viene lanciato. Il pannello Hostinger ruota le cartelle sotto
+`hbuilds/versions/`, quindi chi lo lancia stando dentro
+`current/nodejs` può ritrovarsi con la cwd cancellata e un errore
+("Unable to read current working directory") che non ha nulla a che
+vedere col deploy: lo script fa ora `cd "$HOME"` subito dopo aver
+individuato Node.

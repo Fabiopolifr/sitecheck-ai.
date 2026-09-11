@@ -54,6 +54,15 @@ fi
 export PATH="$NODE_BIN:$PATH"
 echo "==> Node $(node -v)"
 
+# Ci si sposta subito in una directory che esiste di sicuro. Il pannello
+# Hostinger ruota le cartelle sotto hbuilds/versions/, quindi chi lancia
+# lo script stando dentro `current/nodejs` può ritrovarsi con una cwd
+# cancellata: git e npm fallirebbero con un "Unable to read current
+# working directory" che non ha nulla a che vedere con il deploy.
+# L'avviso di bash viene silenziato: uscire da una cwd cancellata non è
+# un problema, ma il messaggio fa sembrare rotto il deploy.
+cd "$HOME" 2>/dev/null || cd /
+
 # --- 2. Controlli preliminari ------------------------------------------
 # Tutti PRIMA di toccare qualunque file, così un problema di rete, di
 # spazio o di percorso non lascia il sito a metà.
